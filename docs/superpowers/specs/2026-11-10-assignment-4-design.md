@@ -262,8 +262,13 @@ scheduler_events = {
   On any exception: `frappe.db.rollback(save_point=sp)` (undoes the lock-protected writes
   and the Email Queue insert for **that row only**), `frappe.log_error(...)`, continue
   with the next row.
-  The scheduler commits once when the job ends. Result: a flag is never stored without
-  its Email Queue row, and one bad row doesn't stop the others. An overlapping run waits on
+  Before the schedule-row lock, the job locks the Shop Contract row (`docstatus = 1`,
+  `FOR UPDATE`), which is the same order payments use (contract → schedule rows), and skips
+  cancelled contracts. Each row is its **own transaction**: the job commits after every row,
+  so it never holds locks across rows and can't deadlock with a payment. Tests call it with
+  `commit=False`. If a deadlock rolls back the whole transaction, the job falls back to a
+  full rollback, which loses only that row. Result: a flag is never stored without its Email
+  Queue row, and one bad row doesn't stop the others. An overlapping run waits on
   the row lock, then sees the flag set and skips. Plain `FOR UPDATE` works on any MariaDB
   that Frappe v15 supports.
 - "Sent" means **queued**: actual delivery, and retries on SMTP failure, are Frappe's Email

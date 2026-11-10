@@ -8,7 +8,13 @@
  "field_order": [
   "code",
   "city",
-  "country"
+  "country",
+  "shops_section",
+  "total_shops",
+  "column_break_shops_1",
+  "available_shops",
+  "column_break_shops_2",
+  "occupied_shops"
  ],
  "fields": [
   {
@@ -31,12 +37,46 @@
    "in_list_view": 1,
    "label": "Country",
    "reqd": 1
+  },
+  {
+   "fieldname": "shops_section",
+   "fieldtype": "Section Break",
+   "label": "Shops"
+  },
+  {
+   "fieldname": "total_shops",
+   "fieldtype": "Int",
+   "label": "Total Shops",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_shops_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "available_shops",
+   "fieldtype": "Int",
+   "label": "Available Shops",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_shops_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "occupied_shops",
+   "fieldtype": "Int",
+   "label": "Occupied Shops",
+   "read_only": 1,
+   "default": "0"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-07 06:27:40.499910",
+ "modified": "2026-11-10 13:59:34.788987",
  "modified_by": "Administrator",
  "module": "Airplane Mode",
  "name": "Airport",

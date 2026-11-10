@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import add_days, add_months, date_diff, flt, getdate
+from frappe.utils import add_days, add_months, date_diff, flt, getdate, today
 
 
 def update_airport_shop_counts(airport):
@@ -60,3 +60,66 @@ def build_rent_schedule(start_date, end_date, rent_amount, precision=2):
 		)
 		n += 1
 	return rows
+
+
+def get_active_contract(shop, on_date=None):
+	"""The submitted contract covering on_date (default today), or None.
+
+	The overlap rule guarantees there is at most one.
+	"""
+	day = getdate(on_date or today())
+	rows = frappe.get_all(
+		"Shop Contract",
+		filters={"shop": shop, "docstatus": 1, "start_date": ["<=", day], "end_date": [">=", day]},
+		fields=["name", "tenant", "end_date"],
+		order_by="start_date desc",
+		limit=1,
+	)
+	return rows[0] if rows else None
+
+
+def sync_shop_status(shop, on_date=None):
+	"""Single source of truth for a shop's status. Recomputed from ALL submitted contracts."""
+	current = frappe.db.get_value(
+		"Airport Shop",
+		shop,
+		["airport", "status", "current_tenant", "current_contract", "contract_expiry"],
+		as_dict=True,
+	)
+	if not current:
+		return
+	contract = get_active_contract(shop, on_date)
+	if contract:
+		target = {
+			"status": "Occupied",
+			"current_tenant": contract.tenant,
+			"current_contract": contract.name,
+			"contract_expiry": getdate(contract.end_date),
+		}
+	else:
+		target = {"status": "Available", "current_tenant": None, "current_contract": None, "contract_expiry": None}
+
+	if any((current.get(key) or None) != (value or None) for key, value in target.items()):
+		# set_value skips Airport Shop.validate, which blocks everyone else from these fields.
+		frappe.db.set_value("Airport Shop", shop, target)
+	update_airport_shop_counts(current.airport)
+
+
+def update_contract_totals(contract):
+	"""Recompute a contract's totals from its schedule rows."""
+	precision = frappe.get_precision("Shop Contract", "total_amount") or 2
+	total, paid = frappe.db.sql(
+		"""select coalesce(sum(amount), 0), coalesce(sum(paid_amount), 0)
+		from `tabRent Schedule` where parent = %s and parenttype = 'Shop Contract'""",
+		contract,
+	)[0]
+	frappe.db.set_value(
+		"Shop Contract",
+		contract,
+		{
+			"total_amount": flt(total, precision),
+			"total_paid": flt(paid, precision),
+			"total_outstanding": flt(flt(total) - flt(paid), precision),
+		},
+		update_modified=False,
+	)

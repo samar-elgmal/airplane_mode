@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "autoname": "CON-.YYYY.-.####",
+ "creation": "2026-11-10 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["shop", "airport", "tenant", "tenant_email", "column_break_1", "rent_amount", "start_date", "end_date", "amended_from", "schedule_section", "rent_schedule", "totals_section", "total_amount", "column_break_2", "total_paid", "column_break_3", "total_outstanding"],
+ "fields": [
+  {"fieldname": "shop", "fieldtype": "Link", "label": "Shop", "options": "Airport Shop", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "airport", "fieldtype": "Link", "label": "Airport", "options": "Airport", "fetch_from": "shop.airport", "read_only": 1, "in_standard_filter": 1},
+  {"fieldname": "tenant", "fieldtype": "Link", "label": "Tenant", "options": "Tenant", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "tenant_email", "fieldtype": "Data", "label": "Tenant Email", "options": "Email", "fetch_from": "tenant.email", "read_only": 1},
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {"fieldname": "rent_amount", "fieldtype": "Currency", "label": "Monthly Rent", "fetch_from": "shop.rent_amount", "fetch_if_empty": 1, "reqd": 1},
+  {"fieldname": "start_date", "fieldtype": "Date", "label": "Start Date", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "end_date", "fieldtype": "Date", "label": "End Date (last day)", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "amended_from", "fieldtype": "Link", "label": "Amended From", "options": "Shop Contract", "no_copy": 1, "print_hide": 1, "read_only": 1, "search_index": 1},
+  {"fieldname": "schedule_section", "fieldtype": "Section Break", "label": "Rent Schedule"},
+  {"fieldname": "rent_schedule", "fieldtype": "Table", "label": "Rent Schedule", "options": "Rent Schedule", "read_only": 1},
+  {"fieldname": "totals_section", "fieldtype": "Section Break", "label": "Totals"},
+  {"fieldname": "total_amount", "fieldtype": "Currency", "label": "Total Rent", "read_only": 1},
+  {"fieldname": "column_break_2", "fieldtype": "Column Break"},
+  {"fieldname": "total_paid", "fieldtype": "Currency", "label": "Total Paid", "read_only": 1},
+  {"fieldname": "column_break_3", "fieldtype": "Column Break"},
+  {"fieldname": "total_outstanding", "fieldtype": "Currency", "label": "Total Outstanding", "read_only": 1}
+ ],
+ "is_submittable": 1,
+ "links": [{"link_doctype": "Rent Payment", "link_fieldname": "shop_contract"}],
+ "modified": "2026-11-10 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Airport Shops",
+ "name": "Shop Contract",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {"amend": 1, "cancel": 1, "create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "submit": 1, "write": 1},
+  {"amend": 1, "cancel": 1, "create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "Airport Authority Personnel", "share": 1, "submit": 1, "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

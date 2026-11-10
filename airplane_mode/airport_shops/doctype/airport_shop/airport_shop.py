@@ -4,12 +4,12 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cstr, flt
+from frappe.utils import cstr, flt, today
 
-from airplane_mode.airport_shops.utils import update_airport_shop_counts
+from airplane_mode.airport_shops.utils import sync_shop_status, update_airport_shop_counts
 
 # Only sync_shop_status (via frappe.db.set_value, which skips validate) may write these.
-PROTECTED_FIELDS = ("status", "current_tenant", "contract_expiry")
+PROTECTED_FIELDS = ("status", "current_tenant", "current_contract", "contract_expiry")
 
 
 class AirportShop(Document):
@@ -28,9 +28,10 @@ class AirportShop(Document):
 		self.validate_unique_shop_number()
 		if not self.is_new():
 			self.validate_protected_fields()
+			self.validate_airport_change()
 
 	def on_update(self):
-		update_airport_shop_counts(self.airport)
+		sync_shop_status(self.name)  # also refreshes this airport's counts
 		before = self.get_doc_before_save()
 		if before and before.airport != self.airport:
 			update_airport_shop_counts(before.airport)
@@ -43,8 +44,7 @@ class AirportShop(Document):
 		if not self.is_new():
 			# autoname already set self.name on a new doc, so only exclude self when it is saved.
 			filters["name"] = ["!=", self.name]
-		duplicate = frappe.db.exists("Airport Shop", filters)
-		if duplicate:
+		if frappe.db.exists("Airport Shop", filters):
 			frappe.throw(_("Shop number {0} already exists at airport {1}.").format(self.shop_number, self.airport))
 		if self.is_new() and frappe.db.exists("Airport Shop", self.name):
 			frappe.throw(
@@ -63,3 +63,10 @@ class AirportShop(Document):
 						self.meta.get_label(fieldname)
 					)
 				)
+
+	def validate_airport_change(self):
+		before = self.get_doc_before_save()
+		if not before or before.airport == self.airport:
+			return
+		if frappe.db.exists("Shop Contract", {"shop": self.name, "docstatus": 1, "end_date": [">=", today()]}):
+			frappe.throw(_("This shop has an active or upcoming contract, so its airport cannot be changed."))

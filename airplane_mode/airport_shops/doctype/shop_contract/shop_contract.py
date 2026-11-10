@@ -6,6 +6,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate
 
+from airplane_mode.airport_shops.doctype.shop_lead.shop_lead import convert_leads_for_contract
 from airplane_mode.airport_shops.utils import build_rent_schedule, sync_shop_status
 
 
@@ -31,6 +32,7 @@ class ShopContract(Document):
 
 	def on_submit(self):
 		sync_shop_status(self.shop)
+		convert_leads_for_contract(self)
 
 	def before_cancel(self):
 		# Lock order matters: a Rent Payment submit locks its own row first, then this contract.

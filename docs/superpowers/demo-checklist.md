@@ -39,7 +39,9 @@ Follow the assignment page top to bottom. Site: http://localhost:8001
 ## Web portal
 - [ ] `/shops`: the list uses Picnic styling and does not extend `web.html`. Filter by airport.
 - [ ] Click a shop to open `/shops/<name>` with its details and **Interested? Apply to rent**.
-- [ ] The web form opens with the Shop pre-filled. Submit it, then show the new **Shop Lead** in the desk.
+- [ ] The web form opens with the Shop pre-filled. Submit it, then show the new **Shop Lead** in the desk (status New).
+- [ ] On the lead, click **Create Tenant**. A Tenant is created from the lead's name, email and phone (or the existing one with that email is reused), and the lead becomes Contacted.
+- [ ] Click **New Contract** (shop and tenant pre-filled), then submit it. The lead becomes **Converted** automatically.
 
 ## Part 3
 - [ ] **Shop Type list:** Stall, Walk-through and Normal are shipped as fixtures (`fixtures/shop_type.json`).

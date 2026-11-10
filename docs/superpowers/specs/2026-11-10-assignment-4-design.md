@@ -28,6 +28,8 @@ Types shipped via fixtures and a REST API demo with Bruno (Part 3).
   it is stored or compared; no raw float equality.
 - Locks use plain `SELECT … FOR UPDATE` only (no `SKIP LOCKED`), so nothing depends on a
   specific MariaDB feature beyond Frappe v15's own minimum.
+- Every "lock, then re-check" reads its data with `FOR UPDATE` too. Under REPEATABLE READ,
+  a plain SELECT after waiting on a lock still sees the old snapshot.
 - Sensitive shop fields (tenant/contract) are protected by **permlevel 1**, not by
   hiding them in API requests.
 
@@ -138,14 +140,18 @@ if empty.
   the same shop whose date range overlaps (inclusive dates).
 - `before_submit`:
   1. Lock the shop: `SELECT name FROM \`tabAirport Shop\` WHERE name=%s FOR UPDATE`.
-  2. **Re-run the overlap check** while holding the lock. A concurrent submit for the same
-     shop waits on the lock, then sees the first contract (now submitted) and fails.
+  2. **Re-run the overlap check** while holding the lock, as a **locking read**
+     (`SELECT … FOR UPDATE`). MariaDB runs at REPEATABLE READ, so a plain SELECT would read
+     the snapshot from the start of the request and miss a contract committed meanwhile.
+     A concurrent submit for the same shop waits on the lock, then the locking read sees the
+     first contract (now submitted) and fails.
   3. Build `rent_schedule` (rules above), all rows Unpaid, `outstanding_amount = amount`;
      set contract totals.
 - `on_submit` / `on_cancel`: call `sync_shop_status(self.shop)`.
 - `before_cancel`: first lock the contract row (`SELECT name FROM \`tabShop Contract\`
-  WHERE name=%s FOR UPDATE`), **then** check for submitted Rent Payments and block if any
-  exist (cancel payments first). Payments take the same contract lock in `_lock_period`, so
+  WHERE name=%s FOR UPDATE`), **then** check for submitted Rent Payments with a locking read
+  (`SELECT … FOR UPDATE`, for the same snapshot reason) and block if any exist (cancel
+  payments first). Payments take the same contract lock in `_lock_period`, so
   a cancel and a payment submit can't overlap: whichever goes second either sees the
   payment (cancel blocked) or sees `docstatus = 2` (payment rejected). Frappe's own
   back-link check on cancel takes no lock, so it isn't enough on its own.

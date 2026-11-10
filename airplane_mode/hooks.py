@@ -279,3 +279,10 @@ fixtures = [
 	},
 	{"dt": "Shop Type", "filters": [["name", "in", ["Stall", "Walk-through", "Normal"]]]},
 ]
+
+scheduler_events = {
+	"daily": [
+		"airplane_mode.airport_shops.tasks.sync_all_shop_statuses",
+		"airplane_mode.airport_shops.tasks.send_rent_reminders",
+	]
+}

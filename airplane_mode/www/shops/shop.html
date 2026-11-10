@@ -1,0 +1,25 @@
+{% extends "templates/shop_portal_base.html" %}
+{% block title %}{{ shop.shop_name | e }}{% endblock %}
+{% block content %}
+<p><a href="/shops">← All shops</a></p>
+<article class="detail">
+	<h1>{{ shop.shop_name | e }}
+		<span class="label {{ 'success' if shop.status == 'Available' else 'error' }}">{{ shop.status }}</span>
+	</h1>
+	{% if shop.image %}<img src="{{ shop.image | e }}" alt="{{ shop.shop_name | e }}">{% endif %}
+	<table class="primary">
+		<tr><th>Shop number</th><td>{{ shop.shop_number | e }}</td></tr>
+		<tr><th>Airport</th><td>{{ shop.airport | e }}</td></tr>
+		<tr><th>Type</th><td>{{ (shop.shop_type or "—") | e }}</td></tr>
+		<tr><th>Area</th><td>{{ shop.area or 0 }} sq ft</td></tr>
+		<tr><th>Rent</th><td>{{ shop.rent_display }} / month</td></tr>
+	</table>
+	{% if shop.description %}<div>{{ shop.description }}</div>{% endif %}
+
+	{% if shop.status == "Available" %}
+	<p><a class="button" href="{{ lead_url }}">Interested? Apply to rent this shop</a></p>
+	{% else %}
+	<p class="meta">This shop is currently leased. <a href="{{ lead_url }}">Join the waiting list</a>.</p>
+	{% endif %}
+</article>
+{% endblock %}

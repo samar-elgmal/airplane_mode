@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{% block title %}Airport Shops{% endblock %}</title>
+	<link rel="stylesheet" href="/assets/airplane_mode/css/picnic.min.css">
+	<link rel="stylesheet" href="/assets/airplane_mode/css/shop_portal.css">
+</head>
+<body>
+	<nav>
+		<a href="/shops" class="brand"><span>✈ Airport Shops</span></a>
+		<input id="menu" type="checkbox" class="show">
+		<label for="menu" class="burger pseudo button">☰</label>
+		<div class="menu">
+			<a href="/shops" class="pseudo button">All shops</a>
+			<a href="/shop-lead/new" class="button">Rent a shop</a>
+		</div>
+	</nav>
+	<main class="portal">
+		{% block content %}{% endblock %}
+	</main>
+</body>
+</html>

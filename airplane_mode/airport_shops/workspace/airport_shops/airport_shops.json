@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\": \"hdr0000001\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\">Airport Shops</span>\", \"col\": 12}}, {\"id\": \"nc00000000\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Available Shops\", \"col\": 4}}, {\"id\": \"nc00000001\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Occupied Shops\", \"col\": 4}}, {\"id\": \"sc00000000\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Airport Shop\", \"col\": 3}}, {\"id\": \"sc00000001\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Shop Contract\", \"col\": 3}}, {\"id\": \"sc00000002\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rent Payment\", \"col\": 3}}, {\"id\": \"sc00000003\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Tenant\", \"col\": 3}}, {\"id\": \"sc00000004\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Airport Shop Settings\", \"col\": 3}}, {\"id\": \"sc00000005\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Airport Shop Occupancy\", \"col\": 3}}]",
+ "content": "[{\"id\": \"hdr0000001\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\">Airport Shops</span>\", \"col\": 12}}, {\"id\": \"nc00000000\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Available Shops\", \"col\": 4}}, {\"id\": \"nc00000001\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Occupied Shops\", \"col\": 4}}, {\"id\": \"sc00000000\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Airport Shop\", \"col\": 3}}, {\"id\": \"sc00000001\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Shop Contract\", \"col\": 3}}, {\"id\": \"sc00000002\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rent Payment\", \"col\": 3}}, {\"id\": \"sc00000003\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Tenant\", \"col\": 3}}, {\"id\": \"sc00000004\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Airport Shop Settings\", \"col\": 3}}, {\"id\": \"sc00000005\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Airport Shop Occupancy\", \"col\": 3}}, {\"id\": \"sc00000006\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Shop Lead\", \"col\": 3}}]",
  "creation": "2026-11-10 17:07:59.460901",
  "custom_blocks": [],
  "docstatus": 0,
@@ -12,7 +12,7 @@
  "is_hidden": 0,
  "label": "Airport Shops",
  "links": [],
- "modified": "2026-11-10 17:07:59.460901",
+ "modified": "2026-11-10 17:13:12.345935",
  "modified_by": "Administrator",
  "module": "Airport Shops",
  "name": "Airport Shops",
@@ -68,6 +68,12 @@
    "link_to": "Airport Shop Occupancy",
    "report_ref_doctype": "Airport Shop",
    "type": "Report"
+  },
+  {
+   "doc_view": "List",
+   "label": "Shop Lead",
+   "link_to": "Shop Lead",
+   "type": "DocType"
   }
  ],
  "title": "Airport Shops"

@@ -286,3 +286,7 @@ scheduler_events = {
 		"airplane_mode.airport_shops.tasks.send_rent_reminders",
 	]
 }
+
+website_route_rules = [
+	{"from_route": "/shops/<shop>", "to_route": "shops/shop"},
+]

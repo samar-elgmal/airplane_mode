@@ -276,5 +276,6 @@ fixtures = [
 				["Airport Authority Personnel", "Fleet Manager", "Travel Agent", "Flight Crew Member"],
 			]
 		],
-	}
+	},
+	{"dt": "Shop Type", "filters": [["name", "in", ["Stall", "Walk-through", "Normal"]]]},
 ]

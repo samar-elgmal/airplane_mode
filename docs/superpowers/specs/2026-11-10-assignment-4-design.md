@@ -142,6 +142,16 @@ if empty.
 - `on_submit` / `on_cancel`: call `sync_shop_status(self.shop)`.
 - `before_cancel`: block if any submitted Rent Payment exists for this contract
   (cancel payments first).
+- **Amend** (cancelled contract → new draft with `amended_from`):
+  - Frappe's amend copies child rows, so `validate` on a doc with `amended_from` set (and
+    `before_submit` for every contract) **clears `rent_schedule` and the totals and
+    rebuilds them** from the contract's own dates and rent. Copied paid amounts, flags
+    and email links are discarded.
+  - Payments are never moved: they stay linked to the original (cancelled) contract,
+    which can only have cancelled payments because of the `before_cancel` rule.
+  - The overlap check excludes `docstatus = 2`, so the cancelled original doesn't block its
+    amendment; the amendment is checked against every other submitted contract, and
+    re-checked under the shop lock in `before_submit`.
 
 **Shop status — single source of truth**
 - `airplane_mode.airport_shops.utils.sync_shop_status(shop)`:
@@ -151,8 +161,15 @@ if empty.
   something changed, then calls `update_airport_shop_counts(airport)`.
 - Every status change goes through this function — contract submit/cancel, the daily job,
   and Airport Shop `on_update`. Nothing else writes `status`.
-- This covers future-dated contracts (activated by the daily job on their start date) and
-  expired contracts (released the day after `end_date`).
+- The state is **always recomputed from all submitted contracts for today**; it never
+  frees a shop because "the old contract ended". So it handles:
+  - future-dated contracts (activated by the daily job on their start date);
+  - expired contracts (released the day after `end_date` if no other contract covers today);
+  - **back-to-back contracts** (A ends 30 Nov, B starts 1 Dec): on 1 Dec the job finds B,
+    so the shop stays Occupied and `current_contract` / `current_tenant` /
+    `contract_expiry` switch to B, with no Available gap.
+- The overlap rule guarantees at most one contract covers any day. "Today" is
+  `frappe.utils.today()` (system time zone).
 
 **Rent Payment (partial payments, concurrency-safe)**
 - `validate`: contract is submitted; a schedule row with `period_start` exists;
@@ -217,15 +234,33 @@ scheduler_events = {
     `templates/emails/rent_overdue.html`. Sets `overdue_reminder_sent_on = today`.
   Each email shows shop, period, outstanding amount and due date. A period whose upcoming
   window was missed (e.g. scheduler down) gets no upcoming email — only the overdue one.
-- Dedupe, per candidate row: `SELECT <flag> FROM \`tabRent Schedule\` WHERE name=%s
-  FOR UPDATE` → **re-check the flag is still NULL** (skip if not) → set the flag → queue the
-  email with `frappe.sendmail` (same transaction, so the email queue row commits together
-  with the flag) → `frappe.db.commit()`. An overlapping run waits on the row lock, then sees
-  the flag set and skips. Plain `FOR UPDATE` works on any MariaDB that Frappe v15 supports.
-- Flags never reset: the schedule is built once on submit and is read-only, so due dates
-  can't change. Amending a cancelled contract builds a fresh schedule with empty flags.
+- Rent Schedule gets two more read-only fields: `reminder_email` and
+  `overdue_reminder_email` (Link → Email Queue), so every flag points at the email it
+  stands for.
+- Per candidate row, inside its own **savepoint** (`frappe.db.savepoint(sp)`):
+  1. `SELECT <flag>, status FROM \`tabRent Schedule\` WHERE name=%s FOR UPDATE` →
+     re-check the flag is still NULL and status ≠ Paid; skip otherwise.
+  2. `q = frappe.sendmail(recipients=[tenant_email], …, reference_doctype="Shop Contract",
+     reference_name=contract)` (default `delayed=True`, no `now`, no `queue_separately`).
+     In v15 this inserts the Email Queue row synchronously in the same transaction.
+  3. If `q` is falsy (v15 returns `[]` when the recipient is filtered out, e.g.
+     unsubscribed or empty email) → raise, so nothing is flagged.
+  4. Set the flag to today and the link field to `q.name`.
+  On any exception: `frappe.db.rollback(save_point=sp)` (undoes the lock-protected writes
+  and the Email Queue insert for **that row only**), `frappe.log_error(...)`, continue
+  with the next row.
+  The scheduler commits once when the job ends. Result: a flag is never stored without
+  its Email Queue row, and one bad row doesn't stop the others. An overlapping run waits on
+  the row lock, then sees the flag set and skips. Plain `FOR UPDATE` works on any MariaDB
+  that Frappe v15 supports.
+- "Sent" means **queued**: actual delivery, and retries on SMTP failure, are Frappe's Email
+  Queue's job (`status` Not Sent / Sent / Error, visible through the link field). We don't
+  re-send on delivery errors.
+- Flags never reset on a submitted contract: the schedule is built once on submit and is
+  read-only, so due dates can't change (see Amend below).
 - Settings form button **Send Reminders Now** → whitelisted method (System Manager /
-  Airport Authority Personnel) calling `send_rent_reminders()` — same dedupe rules apply.
+  Airport Authority Personnel) that **enqueues** `send_rent_reminders` (no work or commits
+  inside the web request) and shows "Reminders queued". The same dedupe rules apply.
 
 ---
 
@@ -313,7 +348,16 @@ Unit tests (`bench --site <site> run-tests --app airplane_mode`):
 - Payment on a missing period / cancelled contract rejected by `_lock_period`.
 - `send_rent_reminders`: nothing when disabled; upcoming sent once inside the window and not
   before it or after the due date; overdue sent once after `overdue_after_days`; second run
-  sends nothing; Paid rows skipped.
+  sends nothing; Paid rows skipped. Every flagged row links to an existing Email Queue row.
+- Reminder failures: patch `frappe.sendmail` to raise for one row → that row has no flag
+  and no Email Queue row, other rows are flagged with their queue rows, and an Error Log is
+  created. Patch it to return `[]` → no flag.
+- Amend: cancel a contract (no payments) → amend → submit: new schedule rebuilt with all
+  rows Unpaid and empty flags; the original keeps its own rows; the amendment overlapping a
+  different submitted contract is rejected.
+- Back-to-back contracts: A (… → 30 Nov) and B (1 Dec → …) on one shop; with today frozen
+  at 30 Nov → Occupied by A; at 1 Dec → still Occupied, `current_contract` = B,
+  `current_tenant` = B's tenant; airport counts unchanged.
 
 Manual: portal pages render with Picnic styling, lead web form pre-fills shop,
 Print Designer receipt prints, Bruno requests succeed, two browser tabs submitting payments

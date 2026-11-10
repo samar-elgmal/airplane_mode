@@ -19,7 +19,10 @@ Types shipped via fixtures and a REST API demo with Bruno (Part 3).
 - Data model: **separate Tenant and Shop Contract** doctypes.
 - Shop status is derived in **one place** (`sync_shop_status`), which also refreshes airport counts.
 - Shop counts: stored on Airport for display; the report always computes them live.
-- Reminders: sent N days before each period's due date, **at most once per period**.
+- Reminders: one **upcoming** reminder (N days before due, up to the due date) and one
+  **overdue** reminder (M days after due) per period — at most two emails per period.
+- Concurrency: contract submit locks the shop row; payment submit/cancel lock the contract
+  row then the period row (fixed order).
 - Portal: `/shops` (list) and `/shops/<name>` (details) via `website_route_rules`.
 
 ---
@@ -62,10 +65,10 @@ New Module Def **Airport Shops** (added to `modules.txt`, folder
 | Airport Shop | normal | `shop_number` (Data, reqd), `shop_name` (Data, reqd), `airport` (Link Airport, reqd), `shop_type` (Link Shop Type), `area` (Float, sq ft), `status` (Select Available/Occupied, default Available, read-only), `current_tenant` (Link Tenant, read-only), `current_contract` (Link Shop Contract, read-only), `contract_expiry` (Date, read-only), `rent_amount` (Currency), `image` (Attach Image), `description` (Text Editor), `published` (Check, default 1) |
 | Tenant | normal | `tenant_name` (Data, reqd), `email` (Data, Email, reqd), `phone` (Data, Phone), `company` (Data) |
 | Shop Contract | submittable | `shop` (Link Airport Shop, reqd), `airport` (fetch), `tenant` (Link Tenant, reqd), `tenant_email` (fetch), `rent_amount` (Currency, monthly, default from shop), `start_date`, `end_date` (Date, reqd), `total_amount`, `total_paid`, `total_outstanding` (Currency, read-only), `rent_schedule` (Table Rent Schedule, read-only) |
-| Rent Schedule | child | `period_start`, `period_end`, `due_date` (Date), `amount`, `paid_amount`, `outstanding_amount` (Currency), `status` (Select Unpaid/Partly Paid/Paid), `reminder_sent_on` (Date) |
+| Rent Schedule | child | `period_start`, `period_end`, `due_date` (Date), `amount`, `paid_amount`, `outstanding_amount` (Currency), `status` (Select Unpaid/Partly Paid/Paid), `reminder_sent_on` (Date), `overdue_reminder_sent_on` (Date) |
 | Rent Payment | submittable | `shop_contract` (Link Shop Contract, reqd), `shop`, `tenant`, `tenant_email` (fetched), `period_start` (Date, reqd — identifies the schedule row; JS pre-fills the earliest unpaid period), `period_outstanding` (Currency, read-only, informational), `amount` (Currency, reqd, > 0), `payment_date` (Date, default Today), `mode_of_payment` (Select Cash/Bank Transfer/Card/Cheque), `reference_no` (Data) |
 | Shop Lead | normal | `lead_name` (Data, reqd), `email` (Data, Email, reqd), `phone` (Data), `shop` (Link Airport Shop), `message` (Small Text), `status` (Select New/Contacted/Converted/Lost) |
-| Airport Shop Settings | Single | `default_rent_amount` (Currency), `enable_rent_reminders` (Check), `reminder_days_before` (Int, default 3, ≥ 0) |
+| Airport Shop Settings | Single | `default_rent_amount` (Currency), `enable_rent_reminders` (Check), `reminder_days_before` (Int, default 3, ≥ 0), `overdue_after_days` (Int, default 3, ≥ 1) |
 
 Naming: Airport Shop `{airport}-{shop_number}` (format autoname); Tenant `TEN-.####`;
 Shop Contract `CON-.YYYY.-.####`; Rent Payment `RCPT-.YYYY.-.####`; Shop Lead `LEAD-.####`.
@@ -78,8 +81,12 @@ if empty.
 
 **Rent schedule (anniversary periods)**
 - `end_date` is the **last day** of the lease (inclusive).
-- Period *n* starts at `start_date + n months` (day clamped to month length, e.g. Jan 31 →
-  Feb 28) and ends the day before period *n+1* starts, capped at `end_date`.
+- Period *n* starts at `get_anniversary_date(start_date, n)` and ends the day before
+  period *n+1* starts, capped at `end_date`.
+- `get_anniversary_date(start_date, months)` (in `airport_shops/utils.py`) =
+  `frappe.utils.add_months(start_date, months)` (relativedelta). It is **always computed from
+  the original `start_date`**, never chained from the previous period, so the day is clamped
+  per month without drifting: 31 Jan → 28/29 Feb → 31 Mar → 30 Apr → 31 May.
 - `due_date = period_start`. Full periods cost `rent_amount`.
 - A final period shorter than a full month is **prorated by days**:
   `rent_amount × days_in_period / days_in_full_period` (rounded to currency precision),
@@ -90,8 +97,12 @@ if empty.
 **Shop Contract**
 - `validate`: `end_date >= start_date`; `rent_amount > 0`; no other submitted contract on
   the same shop whose date range overlaps (inclusive dates).
-- `before_submit`: build `rent_schedule` (rules above), all rows Unpaid,
-  `outstanding_amount = amount`; set contract totals.
+- `before_submit`:
+  1. Lock the shop: `SELECT name FROM \`tabAirport Shop\` WHERE name=%s FOR UPDATE`.
+  2. **Re-run the overlap check** while holding the lock. A concurrent submit for the same
+     shop waits on the lock, then sees the first contract (now submitted) and fails.
+  3. Build `rent_schedule` (rules above), all rows Unpaid, `outstanding_amount = amount`;
+     set contract totals.
 - `on_submit` / `on_cancel`: call `sync_shop_status(self.shop)`.
 - `before_cancel`: block if any submitted Rent Payment exists for this contract
   (cancel payments first).
@@ -111,16 +122,26 @@ if empty.
 - `validate`: contract is submitted; a schedule row with `period_start` exists;
   `amount > 0`; `amount <= outstanding_amount` (early, friendly check); fetch
   `period_outstanding` for display.
-- `on_submit`: inside the submit transaction:
-  1. Lock the schedule row: `SELECT name, amount, paid_amount FROM \`tabRent Schedule\`
-     WHERE parent=%s AND period_start=%s FOR UPDATE`.
-  2. Re-check `paid_amount + self.amount <= amount`; otherwise `frappe.throw` (rolls back).
-  3. Set `paid_amount`, `outstanding_amount`, `status` (Paid when outstanding = 0, Partly Paid
-     when 0 < paid < amount), via `frappe.db.set_value` on the child row.
-  4. Recompute contract `total_paid` / `total_outstanding`.
-  A second concurrent submit for the same period blocks on the row lock until the first
-  commits, then sees the updated `paid_amount` and fails if it would overpay.
-- `on_cancel`: same lock, subtract `self.amount`, recompute status and contract totals.
+- Locking helper `_lock_period(contract, period_start)` — the **only** path used by both
+  `on_submit` and `on_cancel`, called before any amount is read or written:
+  1. `SELECT name FROM \`tabShop Contract\` WHERE name=%s AND docstatus=1 FOR UPDATE`
+     (throw if not found).
+  2. `SELECT name, amount, paid_amount FROM \`tabRent Schedule\` WHERE parent=%s
+     AND parenttype='Shop Contract' AND period_start=%s FOR UPDATE` (throw if not found).
+  Always contract row first, then period row, so two payments on different periods of the
+  same contract cannot deadlock (both also update contract totals). This serialises all
+  payments and cancellations for one contract.
+  Frappe runs each request in one transaction (autocommit off) on InnoDB tables, so the
+  locks hold until the request commits or rolls back.
+- `on_submit`: `_lock_period` → re-check `paid_amount + self.amount <= amount` with the
+  locked values, else `frappe.throw` (rolls back the whole submit) → write `paid_amount`,
+  `outstanding_amount`, `status` (Paid when outstanding = 0, Partly Paid when 0 < paid < amount)
+  on the child row via `frappe.db.set_value` → recompute contract `total_paid` /
+  `total_outstanding` from the rows.
+  A concurrent submit for the same contract waits on the lock, then sees the updated
+  `paid_amount` and fails if it would overpay.
+- `on_cancel`: `_lock_period` → subtract `self.amount` → recompute status and contract
+  totals. Uses the same locks, so a cancel and a new payment can't interleave.
 - Print format **Rent Receipt** built in Print Designer and exported with the app
   (print format JSON in module `Airport Shops`, `standard = Yes`). Shows tenant, shop,
   airport, period, amount paid, period outstanding after this payment, payment date, mode.
@@ -145,13 +166,22 @@ scheduler_events = {
 }
 ```
 - `sync_all_shop_statuses()`: run `sync_shop_status` for every Airport Shop.
-- `send_rent_reminders()`: return immediately if `enable_rent_reminders` is off. Otherwise,
-  for every Rent Schedule row of a submitted contract where `status != Paid`,
-  `reminder_sent_on IS NULL` and `due_date - reminder_days_before <= today`:
-  `frappe.sendmail` to the tenant (template `templates/emails/rent_reminder.html`: shop,
-  period, outstanding amount, due date), then set `reminder_sent_on = today` on that row.
-  Rows are claimed with `FOR UPDATE SKIP LOCKED` so overlapping runs cannot double-send;
-  a retry or a second manual run sends nothing for rows already reminded.
+- `send_rent_reminders()`: return immediately if `enable_rent_reminders` is off. Only rows
+  of submitted contracts with `status != Paid` are considered. Two independent passes:
+  - **Upcoming** — `reminder_sent_on IS NULL` and
+    `due_date - reminder_days_before <= today <= due_date`. Template
+    `templates/emails/rent_reminder.html`. Sets `reminder_sent_on = today`.
+  - **Overdue** — `overdue_reminder_sent_on IS NULL` and
+    `today >= due_date + overdue_after_days`. Template
+    `templates/emails/rent_overdue.html`. Sets `overdue_reminder_sent_on = today`.
+  Each email shows shop, period, outstanding amount and due date. A period whose upcoming
+  window was missed (e.g. scheduler down) gets no upcoming email — only the overdue one.
+- Dedupe: each row is claimed with `FOR UPDATE SKIP LOCKED`, the flag is set, the email is
+  queued with `frappe.sendmail` (same transaction — the email queue row commits with the
+  flag), then `frappe.db.commit()` per row. Overlapping runs skip claimed rows; a retry or
+  a second manual run sends nothing for rows already flagged.
+- Flags never reset: the schedule is built once on submit and is read-only, so due dates
+  can't change. Amending a cancelled contract builds a fresh schedule with empty flags.
 - Settings form button **Send Reminders Now** → whitelisted method (System Manager /
   Airport Authority Personnel) calling `send_rent_reminders()` — same dedupe rules apply.
 
@@ -200,9 +230,12 @@ scheduler_events = {
 
 ## Testing
 Unit tests (`bench --site <site> run-tests --app airplane_mode`):
+- `get_anniversary_date`: 31 Jan 2027 → 28 Feb, 31 Mar, 30 Apr (no drift);
+  31 Jan 2028 (leap) → 29 Feb; 30 Jan → 28 Feb → 30 Mar; 29 Feb 2028 + 12 → 28 Feb 2029.
 - Schedule: 15 Nov–14 Feb → 3 rows; 15 Nov–15 Feb → 4 rows with last prorated;
-  31 Jan start → 28/29 Feb period start; totals equal sum of rows.
-- Overlapping contract rejected; non-overlapping adjacent contract allowed.
+  31 Jan start → period starts 31 Jan, 28 Feb, 31 Mar; totals equal sum of rows.
+- Overlapping contract rejected; non-overlapping adjacent contract allowed; overlap
+  re-checked in `before_submit` (two drafts for the same dates: second submit fails).
 - `sync_shop_status`: active contract → Occupied; future contract → stays Available, then
   Occupied once today reaches start (use `frappe.utils` time freezing / `freeze_time`);
   expired → Available; cancel → Available. Airport counts match after each.
@@ -210,8 +243,10 @@ Unit tests (`bench --site <site> run-tests --app airplane_mode`):
   cancel one → back to Partly Paid; contract totals correct.
 - Contract cancel blocked while payments exist.
 - `update_ticket_gate_numbers` updates draft and submitted tickets.
-- `send_rent_reminders`: nothing when disabled; sends once when enabled and due; second run
-  sends nothing (`reminder_sent_on` set); Paid rows skipped.
+- Payment on a missing period / cancelled contract rejected by `_lock_period`.
+- `send_rent_reminders`: nothing when disabled; upcoming sent once inside the window and not
+  before it or after the due date; overdue sent once after `overdue_after_days`; second run
+  sends nothing; Paid rows skipped.
 
 Manual: portal pages render with Picnic styling, lead web form pre-fills shop,
 Print Designer receipt prints, Bruno requests succeed, two browser tabs submitting payments

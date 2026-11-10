@@ -116,7 +116,7 @@ Code: `AS/doctype/rent_payment/rent_payment.py`, `rent_payment.js`; totals in `A
 | 62 | Next unpaid period | First period paid | Form suggests the next period and its outstanding | `test_open_periods_in_order` |
 | 63 | No access | Travel Agent asks for open periods | Permission error | `test_open_periods_needs_contract_read_permission` |
 
-Receipt print format: Task 11 (Print Designer, done in the UI). Exports to `AS/print_format/rent_receipt/`.
+Receipt print format "receipt" (Print Designer): `airplane_mode/print_designer_formats/airplane_mode/receipt.json`, shipped via `pd_standard_format_folder` in `hooks.py`.
 
 ### 2.5 Shop counts per airport
 Code: `AS/utils.py` (`update_airport_shop_counts`), fields on `AM/doctype/airport/airport.json`, report `AS/report/airport_shop_occupancy/`, cards `AS/number_card/*`, workspace `AS/workspace/airport_shops/`.

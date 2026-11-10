@@ -10,6 +10,10 @@ app_license = "mit"
 
 # required_apps = []
 
+# Print Designer: standard formats designed for this app (the Rent Payment receipt) are exported to
+# airplane_mode/print_designer_formats/<app>/ and loaded when this app is installed on a site with Print Designer.
+pd_standard_format_folder = "print_designer_formats"
+
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
 # 	{

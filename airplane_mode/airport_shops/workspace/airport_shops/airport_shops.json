@@ -1,0 +1,74 @@
+{
+ "charts": [],
+ "content": "[{\"id\": \"hdr0000001\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\">Airport Shops</span>\", \"col\": 12}}, {\"id\": \"nc00000000\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Available Shops\", \"col\": 4}}, {\"id\": \"nc00000001\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Occupied Shops\", \"col\": 4}}, {\"id\": \"sc00000000\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Airport Shop\", \"col\": 3}}, {\"id\": \"sc00000001\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Shop Contract\", \"col\": 3}}, {\"id\": \"sc00000002\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rent Payment\", \"col\": 3}}, {\"id\": \"sc00000003\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Tenant\", \"col\": 3}}, {\"id\": \"sc00000004\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Airport Shop Settings\", \"col\": 3}}, {\"id\": \"sc00000005\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Airport Shop Occupancy\", \"col\": 3}}]",
+ "creation": "2026-11-10 17:07:59.460901",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "hide_custom": 0,
+ "icon": "shop",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Airport Shops",
+ "links": [],
+ "modified": "2026-11-10 17:07:59.460901",
+ "modified_by": "Administrator",
+ "module": "Airport Shops",
+ "name": "Airport Shops",
+ "number_cards": [
+  {
+   "label": "Available Shops",
+   "number_card_name": "Available Shops"
+  },
+  {
+   "label": "Occupied Shops",
+   "number_card_name": "Occupied Shops"
+  }
+ ],
+ "owner": "Administrator",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 0.0,
+ "shortcuts": [
+  {
+   "doc_view": "List",
+   "label": "Airport Shop",
+   "link_to": "Airport Shop",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "Shop Contract",
+   "link_to": "Shop Contract",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "Rent Payment",
+   "link_to": "Rent Payment",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "Tenant",
+   "link_to": "Tenant",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Airport Shop Settings",
+   "link_to": "Airport Shop Settings",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Airport Shop Occupancy",
+   "link_to": "Airport Shop Occupancy",
+   "report_ref_doctype": "Airport Shop",
+   "type": "Report"
+  }
+ ],
+ "title": "Airport Shops"
+}

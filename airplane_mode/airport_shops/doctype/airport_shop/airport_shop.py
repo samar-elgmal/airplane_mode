@@ -46,6 +46,10 @@ class AirportShop(Document):
 		duplicate = frappe.db.exists("Airport Shop", filters)
 		if duplicate:
 			frappe.throw(_("Shop number {0} already exists at airport {1}.").format(self.shop_number, self.airport))
+		if self.is_new() and frappe.db.exists("Airport Shop", self.name):
+			frappe.throw(
+				_("A shop named {0} already exists (another airport may use the same code).").format(self.name)
+			)
 
 	def validate_protected_fields(self):
 		before = self.get_doc_before_save()

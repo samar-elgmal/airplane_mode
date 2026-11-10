@@ -1,5 +1,5 @@
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import flt, getdate
+from frappe.utils import getdate
 
 from airplane_mode.airport_shops.utils import build_rent_schedule, get_anniversary_date
 
@@ -35,7 +35,7 @@ class TestBuildRentSchedule(FrappeTestCase):
 		last = rows[-1]
 		self.assertEqual((last.period_start, last.period_end), (D("2027-02-15"), D("2027-02-15")))
 		# full period would be 15 Feb – 14 Mar 2027 = 28 days
-		self.assertEqual(last.amount, flt(1000 / 28, 2))
+		self.assertEqual(last.amount, 35.71)
 
 	def test_31st_start_uses_anniversaries(self):
 		rows = build_rent_schedule("2027-01-31", "2027-04-29", 1000)

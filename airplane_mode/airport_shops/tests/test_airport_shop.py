@@ -58,3 +58,26 @@ class TestAirportShop(FrappeTestCase):
 		shop.save()
 		self.assertEqual(counts(old.name).total_shops, 0)
 		self.assertEqual(counts(new.name).total_shops, 1)
+
+	def test_same_airport_code_collision_is_friendly(self):
+		make_shop(make_airport("ZZ9"), number="A12")
+		with self.assertRaises(frappe.ValidationError):
+			make_shop(make_airport("ZZ9"), number="A12")
+
+	def test_saving_unchanged_protected_fields_is_allowed(self):
+		tenant = make_tenant()
+		shop = make_shop()
+		frappe.db.set_value(
+			"Airport Shop", shop.name, {"contract_expiry": "2030-01-01", "current_tenant": tenant.name}
+		)
+		shop.reload()
+		shop.contract_expiry = "2030-01-01"
+		shop.shop_name = "Renamed Shop"
+		shop.save()
+		self.assertEqual(frappe.db.get_value("Airport Shop", shop.name, "shop_name"), "Renamed Shop")
+
+	def test_changing_contract_expiry_through_save_is_rejected(self):
+		shop = make_shop()
+		shop.contract_expiry = "2031-01-01"
+		with self.assertRaises(frappe.ValidationError):
+			shop.save()

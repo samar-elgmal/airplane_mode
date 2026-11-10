@@ -2052,7 +2052,7 @@ git commit -m "feat: shop contracts with rent schedule, overlap lock and shop st
  "engine": "InnoDB",
  "field_order": ["shop_contract", "shop", "tenant", "tenant_email", "column_break_1", "period_start", "period_outstanding", "amount", "period_outstanding_after_payment", "details_section", "payment_date", "mode_of_payment", "column_break_2", "reference_no", "amended_from"],
  "fields": [
-  {"fieldname": "shop_contract", "fieldtype": "Link", "label": "Shop Contract", "options": "Shop Contract", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "shop_contract", "fieldtype": "Link", "label": "Shop Contract", "options": "Shop Contract", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1, "search_index": 1},
   {"fieldname": "shop", "fieldtype": "Link", "label": "Shop", "options": "Airport Shop", "read_only": 1, "in_standard_filter": 1},
   {"fieldname": "tenant", "fieldtype": "Link", "label": "Tenant", "options": "Tenant", "read_only": 1, "in_list_view": 1, "in_standard_filter": 1},
   {"fieldname": "tenant_email", "fieldtype": "Data", "label": "Tenant Email", "options": "Email", "read_only": 1},

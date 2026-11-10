@@ -1,6 +1,6 @@
-<p>Dear {{ tenant_name }},</p>
-<p>This is a friendly reminder that the rent for <b>{{ shop_name }}</b> ({{ shop }}) at {{ airport }}
+<p>Dear {{ tenant_name | e }},</p>
+<p>This is a friendly reminder that the rent for <b>{{ shop_name | e }}</b> ({{ shop | e }}) at {{ airport | e }}
 for the period {{ period_start }} – {{ period_end }} is due on <b>{{ due_date }}</b>.</p>
 <p>Amount outstanding: <b>{{ outstanding }}</b></p>
-<p>Contract: {{ contract }}</p>
+<p>Contract: {{ contract | e }}</p>
 <p>Thank you,<br>Airport Authority</p>

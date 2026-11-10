@@ -1,6 +1,6 @@
-<p>Dear {{ tenant_name }},</p>
-<p>The rent for <b>{{ shop_name }}</b> ({{ shop }}) at {{ airport }} for the period
+<p>Dear {{ tenant_name | e }},</p>
+<p>The rent for <b>{{ shop_name | e }}</b> ({{ shop | e }}) at {{ airport | e }} for the period
 {{ period_start }} – {{ period_end }} was due on <b>{{ due_date }}</b> and is now overdue.</p>
 <p>Amount outstanding: <b>{{ outstanding }}</b></p>
-<p>Please pay as soon as possible. Contract: {{ contract }}</p>
+<p>Please pay as soon as possible. Contract: {{ contract | e }}</p>
 <p>Airport Authority</p>

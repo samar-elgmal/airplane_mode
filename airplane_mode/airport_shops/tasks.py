@@ -30,10 +30,21 @@ def sync_all_shop_statuses(on_date=None):
 		sync_shop_status(shop, on_date)
 
 
-def send_rent_reminders(on_date=None):
+def send_rent_reminders(on_date=None, commit=True):
 	"""Daily: one upcoming and one overdue reminder per unpaid period, at most.
 
-	Returns {"upcoming": n, "overdue": m} (rows actually queued). The scheduler commits at the end.
+	Returns {"upcoming": n, "overdue": m} (rows actually queued).
+
+	Each row is its own transaction: with ``commit=True`` (scheduler and the Send Reminders
+	Now button) the job commits after every queued row, and after logging a failed one. Locks
+	are therefore held for one row only, never across the whole run.
+
+	Lock order is Shop Contract row -> Rent Schedule row, the same order Rent Payment uses
+	(contract -> period row -> all of the contract's schedule rows). Locking a schedule row
+	without its contract, and holding it until the end of the run, could form a cycle with a
+	payment on the same contract and deadlock.
+
+	Tests pass ``commit=False`` so everything stays in the test transaction and rolls back.
 	"""
 	result = {"upcoming": 0, "overdue": 0}
 	settings = frappe.get_single("Airport Shop Settings")
@@ -55,7 +66,7 @@ def send_rent_reminders(on_date=None):
 	}
 	for kind, (condition, values) in windows.items():
 		for candidate in _candidates(REMINDER_KINDS[kind]["flag"], condition, {"day": day, **values}):
-			if _send_one(candidate.name, candidate.contract, kind, day):
+			if _send_one(candidate.name, candidate.contract, kind, day, commit):
 				result[kind] += 1
 	return result
 
@@ -73,15 +84,21 @@ def _candidates(flag, condition, values):
 	)
 
 
-def _send_one(row_name, contract, kind, day):
+def _send_one(row_name, contract, kind, day, commit=True):
 	"""Queue one reminder inside its own savepoint. True if it was queued and flagged."""
 	spec = REMINDER_KINDS[kind]
 	save_point = f"rent_reminder_{frappe.generate_hash(length=10)}"
 	frappe.db.savepoint(save_point)
 	try:
+		# Contract first, exactly like Rent Payment._lock_period, then the schedule row.
+		if not frappe.db.sql(
+			"select name from `tabShop Contract` where name = %s and docstatus = 1 for update",
+			contract,
+		):
+			return False  # cancelled since the candidates were selected
 		locked = frappe.db.sql(
 			f"""select `{spec['flag']}` as flag, status, period_start, period_end, due_date, outstanding_amount
-			from `tabRent Schedule` where name = %s for update""",
+			from `tabRent Schedule` where name = %s and docstatus = 1 for update""",
 			row_name,
 			as_dict=True,
 		)
@@ -118,9 +135,18 @@ def _send_one(row_name, contract, kind, day):
 		frappe.db.set_value(
 			"Rent Schedule", row_name, {spec["flag"]: day, spec["link"]: queued.name}, update_modified=False
 		)
+		if commit:
+			frappe.db.commit()  # flag + Email Queue row together; releases this row's locks
 		return True
 	except Exception:
 		# Undo this row only: the flag and its Email Queue row go together or not at all.
-		frappe.db.rollback(save_point=save_point)
+		try:
+			frappe.db.rollback(save_point=save_point)
+		except Exception:
+			# e.g. after a deadlock InnoDB already rolled back the whole transaction and the
+			# savepoint is gone. Earlier rows were committed, so only this row is lost.
+			frappe.db.rollback()
 		frappe.log_error(title=f"Rent reminder ({kind}) failed for {row_name}")
+		if commit:
+			frappe.db.commit()
 		return False

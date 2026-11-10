@@ -1,0 +1,28 @@
+{
+ "actions": [],
+ "creation": "2026-11-10 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["default_rent_amount", "reminders_section", "enable_rent_reminders", "reminder_days_before", "overdue_after_days"],
+ "fields": [
+  {"fieldname": "default_rent_amount", "fieldtype": "Currency", "label": "Default Rent Amount (per month)"},
+  {"fieldname": "reminders_section", "fieldtype": "Section Break", "label": "Rent Reminders"},
+  {"fieldname": "enable_rent_reminders", "fieldtype": "Check", "label": "Enable Rent Reminders", "default": "0"},
+  {"fieldname": "reminder_days_before", "fieldtype": "Int", "label": "Send Reminder (days before due date)", "default": "3", "depends_on": "enable_rent_reminders"},
+  {"fieldname": "overdue_after_days", "fieldtype": "Int", "label": "Send Overdue Reminder (days after due date)", "default": "3", "depends_on": "enable_rent_reminders"}
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-11-10 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Airport Shops",
+ "name": "Airport Shop Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "email": 1, "print": 1, "read": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"create": 1, "email": 1, "print": 1, "read": 1, "role": "Airport Authority Personnel", "share": 1, "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

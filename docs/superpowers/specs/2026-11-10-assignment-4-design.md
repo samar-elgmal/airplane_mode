@@ -54,8 +54,14 @@ Types shipped via fixtures and a REST API demo with Bruno (Part 3).
 - `AirplaneFlight.on_update` and `on_update_after_submit`: if
   `self.has_value_changed("gate_number")`, call
   `frappe.enqueue("airplane_mode.airplane_mode.tasks.update_ticket_gate_numbers",
-  flight=self.name, queue="short", enqueue_after_commit=True,
-  job_id=f"update_ticket_gates::{self.name}", deduplicate=True)`.
+  flight=self.name, queue="short", enqueue_after_commit=True)`.
+  **No `job_id` / `deduplicate`.** In Frappe v15.125.0 `deduplicate=True` skips the new
+  job when the existing one is `QUEUED` **or `STARTED`** (`utils/background_jobs.py`). If
+  the gate changes again while a job is running and has already read the old gate, the
+  new job would be dropped and tickets would keep the stale gate. Since the job is
+  idempotent, an extra job is harmless; a dropped job is not.
+  `enqueue_after_commit=True` makes sure the job only starts after the new gate is
+  committed, so it always reads it.
   Frappe lifecycle: save → `on_update`; submit → `on_update` then `on_submit`; update after
   submit → `on_update_after_submit` only — so one change triggers one hook.
 - `update_ticket_gate_numbers(flight)`: reads the **current** `gate_number` from the flight
@@ -290,7 +296,9 @@ Unit tests (`bench --site <site> run-tests --app airplane_mode`):
 - Contract cancel blocked while payments exist.
 - `update_ticket_gate_numbers` updates draft and submitted tickets; running it twice is a
   no-op; it uses the flight's current gate. Changing the gate on a submitted flight enqueues
-  exactly one job (patch `frappe.enqueue` and count calls).
+  exactly one job; saving without a gate change enqueues none (patch `frappe.enqueue` and
+  count calls). Two gate changes in a row (A → B → C) enqueue two jobs and tickets end on C
+  whichever job runs last.
 - Crew: duplicate crew member rejected server-side; tampered `crew_role` is overwritten
   from Crew Member.
 - Airport Shop: changing `status`/`current_tenant`/`current_contract`/`contract_expiry`

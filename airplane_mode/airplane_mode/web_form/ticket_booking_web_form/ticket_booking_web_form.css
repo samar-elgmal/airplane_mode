@@ -1,0 +1,6 @@
+/* Blue Confirm button, same shade as the Book Flight button */
+.web-form .submit-btn {
+	background-color: #2490EF;
+	border-color: #2490EF;
+	color: #fff;
+}

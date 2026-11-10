@@ -1977,12 +1977,16 @@ class AirportShop(Document):
 		update_airport_shop_counts(self.airport)
 
 	def validate_unique_shop_number(self):
-		duplicate = frappe.db.exists(
-			"Airport Shop",
-			{"airport": self.airport, "shop_number": self.shop_number, "name": ["!=", self.name]},
-		)
-		if duplicate:
+		filters = {"airport": self.airport, "shop_number": self.shop_number}
+		if not self.is_new():
+			# autoname already set self.name on a new doc, so only exclude self when it is saved.
+			filters["name"] = ["!=", self.name]
+		if frappe.db.exists("Airport Shop", filters):
 			frappe.throw(_("Shop number {0} already exists at airport {1}.").format(self.shop_number, self.airport))
+		if self.is_new() and frappe.db.exists("Airport Shop", self.name):
+			frappe.throw(
+				_("A shop named {0} already exists (another airport may use the same code).").format(self.name)
+			)
 
 	def validate_protected_fields(self):
 		before = self.get_doc_before_save()

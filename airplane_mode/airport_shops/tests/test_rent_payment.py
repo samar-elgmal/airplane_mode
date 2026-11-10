@@ -25,6 +25,7 @@ class TestRentPayment(FrappeTestCase):
 		self.contract = make_contract(make_shop(), start=FIRST, end="2027-02-14", rent=1000)
 
 	def tearDown(self):
+		frappe.set_user("Administrator")
 		frappe.db.rollback()
 
 	def test_partial_then_full(self):
@@ -89,3 +90,36 @@ class TestRentPayment(FrappeTestCase):
 		make_payment(self.contract, FIRST, 1000)
 		periods = get_open_periods(self.contract.name)
 		self.assertEqual([str(p.period_start) for p in periods], ["2026-12-15", "2027-01-15"])
+
+	def test_zero_amount_rejected(self):
+		with self.assertRaises(frappe.ValidationError):
+			make_payment(self.contract, FIRST, 0)
+
+	def test_amount_rounded_to_schedule_precision(self):
+		payment = make_payment(self.contract, FIRST, 400.004)
+		self.assertEqual(frappe.db.get_value("Rent Payment", payment.name, "amount"), 400.0)
+		self.assertEqual(period(self.contract).paid_amount, 400.0)
+
+	def test_cancel_full_payment_returns_period_to_unpaid(self):
+		payment = make_payment(self.contract, FIRST, 1000)
+		payment.cancel()
+		row = period(self.contract)
+		self.assertEqual((row.status, row.paid_amount, row.outstanding_amount), ("Unpaid", 0, 1000))
+		self.assertEqual(totals(self.contract).total_paid, 0)
+
+	def test_open_periods_needs_contract_read_permission(self):
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": f"{frappe.generate_hash(length=8)}@example.com",
+				"first_name": "No Contract Access",
+				"send_welcome_email": 0,
+				"roles": [{"role": "Travel Agent"}],
+			}
+		).insert(ignore_permissions=True)
+		try:
+			frappe.set_user(user.name)
+			with self.assertRaises(frappe.PermissionError):
+				get_open_periods(self.contract.name)
+		finally:
+			frappe.set_user("Administrator")

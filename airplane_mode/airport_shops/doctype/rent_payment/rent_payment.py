@@ -9,10 +9,20 @@ from frappe.utils import flt
 from airplane_mode.airport_shops.utils import update_contract_totals
 
 
+def money_precision():
+	"""Payments settle Rent Schedule rows, so they round to the schedule's precision."""
+	return frappe.get_precision("Rent Schedule", "amount") or 2
+
+
+def inconsistent():
+	frappe.throw(_("Rent Schedule row is inconsistent with its payments."))
+
+
 class RentPayment(Document):
 	def validate(self):
-		p = self.precision("amount") or 2
-		if flt(self.amount, p) <= 0:
+		p = money_precision()
+		self.amount = flt(self.amount, p)
+		if self.amount <= 0:
 			frappe.throw(_("Amount Paid must be greater than zero."))
 
 		contract = frappe.db.get_value(
@@ -32,12 +42,14 @@ class RentPayment(Document):
 			frappe.throw(_("Contract {0} has no rent period starting on {1}.").format(self.shop_contract, self.period_start))
 		self.period_outstanding = flt(row.outstanding_amount, p)
 		# Early, friendly check. The authoritative check runs under a lock in on_submit.
-		if flt(flt(self.amount) - flt(row.outstanding_amount), p) > 0:
+		if flt(self.amount - flt(row.outstanding_amount), p) > 0:
 			frappe.throw(_("Amount is more than the outstanding {0} for this period.").format(self.period_outstanding))
 
 	def on_submit(self):
-		p = self.precision("amount") or 2
+		p = money_precision()
 		row = self._lock_period()
+		# Refresh from the locked row: validate's value came from an unlocked snapshot.
+		self.db_set("period_outstanding", flt(flt(row.amount) - flt(row.paid_amount), p))
 		new_paid = flt(flt(row.paid_amount) + flt(self.amount), p)
 		if flt(new_paid - flt(row.amount), p) > 0:
 			frappe.throw(_("This payment would overpay the period. Another payment was recorded first."))
@@ -45,9 +57,12 @@ class RentPayment(Document):
 		self.db_set("period_outstanding_after_payment", outstanding)  # receipt snapshot
 
 	def on_cancel(self):
-		p = self.precision("amount") or 2
+		p = money_precision()
 		row = self._lock_period()
-		self._apply(row, max(flt(flt(row.paid_amount) - flt(self.amount), p), 0))
+		new_paid = flt(flt(row.paid_amount) - flt(self.amount), p)
+		if new_paid < 0:
+			inconsistent()
+		self._apply(row, new_paid)
 
 	def _lock_period(self):
 		"""The only lock path for payments: contract row first, then the period row."""
@@ -68,9 +83,11 @@ class RentPayment(Document):
 		return rows[0]
 
 	def _apply(self, row, new_paid):
-		p = self.precision("amount") or 2
-		outstanding = max(flt(flt(row.amount) - new_paid, p), 0)
-		if outstanding <= 0:
+		p = money_precision()
+		outstanding = flt(flt(row.amount) - new_paid, p)
+		if outstanding < 0:
+			inconsistent()
+		if outstanding == 0:
 			status = "Paid"
 		elif new_paid > 0:
 			status = "Partly Paid"

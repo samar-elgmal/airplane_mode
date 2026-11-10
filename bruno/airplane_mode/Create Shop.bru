@@ -1,0 +1,27 @@
+meta {
+  name: Create Shop
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/api/resource/Airport Shop
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: token {{api_key}}:{{api_secret}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "shop_number": "API-1",
+    "shop_name": "Coffee Corner (created via API)",
+    "airport": "Cairo International Airport",
+    "shop_type": "Stall",
+    "area": 80,
+    "status": "Occupied"
+  }
+}

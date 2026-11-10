@@ -1,0 +1,20 @@
+meta {
+  name: List Shops (public fields)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/resource/Airport Shop?fields=["name","shop_name","shop_number","airport","shop_type","area","rent_amount","status"]&limit_page_length=0
+  body: none
+  auth: none
+}
+
+params:query {
+  fields: ["name","shop_name","shop_number","airport","shop_type","area","rent_amount","status"]
+  limit_page_length: 0
+}
+
+headers {
+  Authorization: token {{api_key}}:{{api_secret}}
+}

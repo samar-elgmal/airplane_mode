@@ -12,6 +12,7 @@
   "shop",
   "status",
   "tenant",
+  "shop_contract",
   "message_section",
   "message"
  ],
@@ -74,10 +75,18 @@
    "options": "Tenant",
    "read_only": 1,
    "no_copy": 1
+  },
+  {
+   "fieldname": "shop_contract",
+   "fieldtype": "Link",
+   "label": "Shop Contract",
+   "options": "Shop Contract",
+   "read_only": 1,
+   "no_copy": 1
   }
  ],
  "links": [],
- "modified": "2026-11-10 15:43:22.907295",
+ "modified": "2026-11-10 15:56:10.741621",
  "modified_by": "Administrator",
  "module": "Airport Shops",
  "name": "Shop Lead",

@@ -145,9 +145,13 @@
   {
    "link_doctype": "Rent Payment",
    "link_fieldname": "shop_contract"
+  },
+  {
+   "link_doctype": "Shop Lead",
+   "link_fieldname": "shop_contract"
   }
  ],
- "modified": "2026-11-10 14:32:53.632375",
+ "modified": "2026-11-10 15:56:10.771489",
  "modified_by": "Administrator",
  "module": "Airport Shops",
  "name": "Shop Contract",

@@ -107,9 +107,56 @@ class TestAutoConvertLeads(FrappeTestCase):
 		self.assertEqual(lead_state(other_shop_lead).status, "New")
 		self.assertEqual(lead_state(lost).status, "Lost")
 
+	def test_converted_lead_links_to_its_contract(self):
+		shop, tenant = make_shop(), make_tenant()
+		lead = make_lead(shop, email=tenant.email)
+		contract = make_contract(shop, tenant, start="2027-01-01", end="2027-03-31")
+		self.assertEqual(frappe.db.get_value("Shop Lead", lead.name, "shop_contract"), contract.name)
+
+	def test_cancelled_contract_reopens_its_leads(self):
+		shop, tenant = make_shop(), make_tenant()
+		lead = make_lead(shop, email=tenant.email)
+		contract = make_contract(shop, tenant, start="2027-01-01", end="2027-03-31")
+		contract.reload()
+		contract.cancel()
+		state = frappe.db.get_value("Shop Lead", lead.name, ["status", "shop_contract"], as_dict=True)
+		self.assertEqual((state.status, state.shop_contract), ("Contacted", None))
+
 	def test_draft_contract_does_not_convert(self):
 		shop = make_shop()
 		tenant = make_tenant()
 		lead = make_lead(shop, email=tenant.email)
 		make_contract(shop, tenant, start="2027-01-01", end="2027-03-31", submit=False)
 		self.assertEqual(lead_state(lead).status, "New")
+
+
+class TestLeadConnections(FrappeTestCase):
+	def tearDown(self):
+		frappe.db.rollback()
+
+	def _connections(self, doctype, name):
+		from frappe.desk.notifications import get_open_count
+
+		found = get_open_count(doctype, name)["count"]
+		return {d["doctype"]: d.get("names") or d["count"] for d in found["internal_links_found"]} | {
+			d["doctype"]: d["count"] for d in found["external_links_found"] if d["count"]
+		}
+
+	def test_lead_shows_its_tenant_and_contract(self):
+		shop = make_shop()
+		lead = make_lead(shop)
+		tenant = create_tenant(lead.name)
+		contract = make_contract(shop, frappe.get_doc("Tenant", tenant), start="2027-01-01", end="2027-03-31")
+
+		links = self._connections("Shop Lead", lead.name)
+		self.assertEqual(links["Tenant"], [tenant])
+		self.assertEqual(links["Shop Contract"], [contract.name])
+
+	def test_tenant_and_contract_show_the_lead(self):
+		shop = make_shop()
+		lead = make_lead(shop)
+		tenant = create_tenant(lead.name)
+		contract = make_contract(shop, frappe.get_doc("Tenant", tenant), start="2027-01-01", end="2027-03-31")
+
+		self.assertEqual(self._connections("Tenant", tenant).get("Shop Lead"), 1)
+		self.assertEqual(self._connections("Shop Contract", contract.name).get("Shop Lead"), 1)

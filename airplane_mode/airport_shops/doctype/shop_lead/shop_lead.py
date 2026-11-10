@@ -58,5 +58,15 @@ def convert_leads_for_contract(contract):
 		pluck="name",
 	)
 	for lead in leads:
-		frappe.db.set_value("Shop Lead", lead, "status", "Converted")
+		frappe.db.set_value("Shop Lead", lead, {"status": "Converted", "shop_contract": contract.name})
+	return leads
+
+
+def reopen_leads_for_contract(contract):
+	"""A cancelled contract puts its converted leads back to Contacted, so an amendment can convert them again."""
+	leads = frappe.get_all(
+		"Shop Lead", filters={"shop_contract": contract.name, "status": "Converted"}, pluck="name"
+	)
+	for lead in leads:
+		frappe.db.set_value("Shop Lead", lead, {"status": "Contacted", "shop_contract": None})
 	return leads

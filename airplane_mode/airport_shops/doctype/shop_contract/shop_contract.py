@@ -6,7 +6,10 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate
 
-from airplane_mode.airport_shops.doctype.shop_lead.shop_lead import convert_leads_for_contract
+from airplane_mode.airport_shops.doctype.shop_lead.shop_lead import (
+	convert_leads_for_contract,
+	reopen_leads_for_contract,
+)
 from airplane_mode.airport_shops.utils import build_rent_schedule, sync_shop_status
 
 
@@ -48,6 +51,7 @@ class ShopContract(Document):
 
 	def on_cancel(self):
 		sync_shop_status(self.shop)
+		reopen_leads_for_contract(self)
 
 	def validate_no_overlap(self, for_update=False):
 		if for_update:

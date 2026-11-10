@@ -58,7 +58,10 @@ def convert_leads_for_contract(contract):
 		pluck="name",
 	)
 	for lead in leads:
-		frappe.db.set_value("Shop Lead", lead, {"status": "Converted", "shop_contract": contract.name})
+		# A lead matched by email gets linked to the tenant too, so its Connections show both.
+		frappe.db.set_value(
+			"Shop Lead", lead, {"status": "Converted", "shop_contract": contract.name, "tenant": contract.tenant}
+		)
 	return leads
 
 

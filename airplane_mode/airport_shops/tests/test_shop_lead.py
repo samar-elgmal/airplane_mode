@@ -112,6 +112,7 @@ class TestAutoConvertLeads(FrappeTestCase):
 		lead = make_lead(shop, email=tenant.email)
 		contract = make_contract(shop, tenant, start="2027-01-01", end="2027-03-31")
 		self.assertEqual(frappe.db.get_value("Shop Lead", lead.name, "shop_contract"), contract.name)
+		self.assertEqual(frappe.db.get_value("Shop Lead", lead.name, "tenant"), tenant.name)  # matched by email
 
 	def test_cancelled_contract_reopens_its_leads(self):
 		shop, tenant = make_shop(), make_tenant()

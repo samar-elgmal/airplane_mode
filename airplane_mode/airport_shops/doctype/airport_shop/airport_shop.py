@@ -31,7 +31,10 @@ class AirportShop(Document):
 			self.validate_airport_change()
 
 	def on_update(self):
-		sync_shop_status(self.name)  # also refreshes this airport's counts
+		# Also refreshes this airport's counts. Reload when it wrote, so the in-memory doc
+		# (and the form) doesn't hold a stale status/modified.
+		if sync_shop_status(self.name):
+			self.reload()
 		before = self.get_doc_before_save()
 		if before and before.airport != self.airport:
 			update_airport_shop_counts(before.airport)

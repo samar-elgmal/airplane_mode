@@ -79,7 +79,10 @@ def get_active_contract(shop, on_date=None):
 
 
 def sync_shop_status(shop, on_date=None):
-	"""Single source of truth for a shop's status. Recomputed from ALL submitted contracts."""
+	"""Single source of truth for a shop's status. Recomputed from ALL submitted contracts.
+
+	Returns True when it wrote changes to the shop, so callers holding the doc can reload it.
+	"""
 	current = frappe.db.get_value(
 		"Airport Shop",
 		shop,
@@ -87,7 +90,7 @@ def sync_shop_status(shop, on_date=None):
 		as_dict=True,
 	)
 	if not current:
-		return
+		return False
 	contract = get_active_contract(shop, on_date)
 	if contract:
 		target = {
@@ -99,10 +102,12 @@ def sync_shop_status(shop, on_date=None):
 	else:
 		target = {"status": "Available", "current_tenant": None, "current_contract": None, "contract_expiry": None}
 
-	if any((current.get(key) or None) != (value or None) for key, value in target.items()):
+	changed = any((current.get(key) or None) != (value or None) for key, value in target.items())
+	if changed:
 		# set_value skips Airport Shop.validate, which blocks everyone else from these fields.
 		frappe.db.set_value("Airport Shop", shop, target)
 	update_airport_shop_counts(current.airport)
+	return changed
 
 
 def update_contract_totals(contract):

@@ -94,7 +94,10 @@ New Module Def **Airport Shops** (added to `modules.txt`, folder
 Airport Shop `current_tenant`, `current_contract`, `contract_expiry` are **permlevel 1**
 (read: Airport Authority Personnel, System Manager; nobody writes them through the form).
 
-Naming: Airport Shop `{airport}-{shop_number}` (format autoname); Tenant `TEN-.####`;
+Naming: Airport Shop `{airport code}-{shop_number}` set in `autoname()` (Airport names are
+free text via Prompt and may contain spaces; the code gives clean portal URLs such as
+`/shops/CAI-A12`). `validate` rejects a duplicate `shop_number` within the same airport;
+Tenant `TEN-.####`;
 Shop Contract `CON-.YYYY.-.####`; Rent Payment `RCPT-.YYYY.-.####`; Shop Lead `LEAD-.####`.
 
 ### Behaviour
@@ -140,8 +143,12 @@ if empty.
   3. Build `rent_schedule` (rules above), all rows Unpaid, `outstanding_amount = amount`;
      set contract totals.
 - `on_submit` / `on_cancel`: call `sync_shop_status(self.shop)`.
-- `before_cancel`: block if any submitted Rent Payment exists for this contract
-  (cancel payments first).
+- `before_cancel`: first lock the contract row (`SELECT name FROM \`tabShop Contract\`
+  WHERE name=%s FOR UPDATE`), **then** check for submitted Rent Payments and block if any
+  exist (cancel payments first). Payments take the same contract lock in `_lock_period`, so
+  a cancel and a payment submit can't overlap: whichever goes second either sees the
+  payment (cancel blocked) or sees `docstatus = 2` (payment rejected). Frappe's own
+  back-link check on cancel takes no lock, so it isn't enough on its own.
 - **Amend** (cancelled contract → new draft with `amended_from`):
   - Frappe's amend copies child rows, so `validate` on a doc with `amended_from` set (and
     `before_submit` for every contract) **clears `rent_schedule` and the totals and
@@ -280,6 +287,10 @@ scheduler_events = {
 - Web Form **Shop Lead** (route `shop-lead`, guests allowed, fields lead_name, email,
   phone, shop, message). The `shop` field is pre-filled from the query string.
 - Pages set `no_cache = 1`.
+- Portal pages run as Guest, and `frappe.get_all` ignores permissions, so both pages query
+  an explicit **public field list** (`name, shop_name, shop_number, airport, shop_type, area,
+  rent_amount, status, image, description`) with `published = 1`. They never pass the full
+  doc to the template, so tenant and contract data can't leak.
 
 ---
 
@@ -324,11 +335,13 @@ Unit tests (`bench --site <site> run-tests --app airplane_mode`):
 - Overlapping contract rejected; non-overlapping adjacent contract allowed; overlap
   re-checked in `before_submit` (two drafts for the same dates: second submit fails).
 - `sync_shop_status`: active contract → Occupied; future contract → stays Available, then
-  Occupied once today reaches start (use `frappe.utils` time freezing / `freeze_time`);
+  Occupied once today reaches start (`FrappeTestCase.freeze_time`);
   expired → Available; cancel → Available. Airport counts match after each.
 - Partial payments: 40% + 60% → Partly Paid then Paid; third payment rejected (overpay);
   cancel one → back to Partly Paid; contract totals correct.
 - Contract cancel blocked while payments exist.
+- Portal: guest GET `/shops` and `/shops/<name>` contain no tenant name or contract id;
+  unpublished shop → 404.
 - `update_ticket_gate_numbers` updates draft and submitted tickets; running it twice is a
   no-op; it uses the flight's current gate. Changing the gate on a submitted flight enqueues
   exactly one job; saving without a gate change enqueues none (patch `frappe.enqueue` and
@@ -366,7 +379,10 @@ for the same period cannot overpay.
 ## Setup Prerequisites
 - MariaDB **10.6+** with InnoDB (Frappe v15 minimum; this bench runs 10.11.13). Only plain
   `SELECT … FOR UPDATE` is used.
-- `bench get-app print_designer` (version compatible with Frappe v15) and
-  `bench --site <site> install-app print_designer`.
+- `developer_mode: 1` on the site (already set on `airplane.local`), so new doctypes,
+  reports and print formats are written to the app folder.
+- `bench get-app print_designer --branch version-15` and
+  `bench --site airplane.local install-app print_designer`. Its asset build runs on this
+  bench's Node 18.19. If the build fails, that blocks only the receipt task.
 - Scheduler enabled on the site (`bench --site <site> enable-scheduler`) and a worker running
   for the background job.

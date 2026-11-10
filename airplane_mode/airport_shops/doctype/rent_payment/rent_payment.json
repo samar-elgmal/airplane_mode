@@ -1,0 +1,40 @@
+{
+ "actions": [],
+ "autoname": "RCPT-.YYYY.-.####",
+ "creation": "2026-11-10 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["shop_contract", "shop", "tenant", "tenant_email", "column_break_1", "period_start", "period_outstanding", "amount", "period_outstanding_after_payment", "details_section", "payment_date", "mode_of_payment", "column_break_2", "reference_no", "amended_from"],
+ "fields": [
+  {"fieldname": "shop_contract", "fieldtype": "Link", "label": "Shop Contract", "options": "Shop Contract", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1, "search_index": 1},
+  {"fieldname": "shop", "fieldtype": "Link", "label": "Shop", "options": "Airport Shop", "read_only": 1, "in_standard_filter": 1},
+  {"fieldname": "tenant", "fieldtype": "Link", "label": "Tenant", "options": "Tenant", "read_only": 1, "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "tenant_email", "fieldtype": "Data", "label": "Tenant Email", "options": "Email", "read_only": 1},
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {"fieldname": "period_start", "fieldtype": "Date", "label": "Rent Period (start)", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "period_outstanding", "fieldtype": "Currency", "label": "Outstanding Before Payment", "read_only": 1},
+  {"fieldname": "amount", "fieldtype": "Currency", "label": "Amount Paid", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "period_outstanding_after_payment", "fieldtype": "Currency", "label": "Outstanding After Payment", "read_only": 1, "no_copy": 1},
+  {"fieldname": "details_section", "fieldtype": "Section Break", "label": "Payment Details"},
+  {"fieldname": "payment_date", "fieldtype": "Date", "label": "Payment Date", "default": "Today", "reqd": 1},
+  {"fieldname": "mode_of_payment", "fieldtype": "Select", "label": "Mode of Payment", "options": "Cash\nBank Transfer\nCard\nCheque", "default": "Cash", "reqd": 1},
+  {"fieldname": "column_break_2", "fieldtype": "Column Break"},
+  {"fieldname": "reference_no", "fieldtype": "Data", "label": "Reference No"},
+  {"fieldname": "amended_from", "fieldtype": "Link", "label": "Amended From", "options": "Rent Payment", "no_copy": 1, "print_hide": 1, "read_only": 1, "search_index": 1}
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-11-10 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Airport Shops",
+ "name": "Rent Payment",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {"amend": 1, "cancel": 1, "create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "submit": 1, "write": 1},
+  {"amend": 1, "cancel": 1, "create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "Airport Authority Personnel", "share": 1, "submit": 1, "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

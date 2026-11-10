@@ -111,11 +111,17 @@ def sync_shop_status(shop, on_date=None):
 
 
 def update_contract_totals(contract):
-	"""Recompute a contract's totals from its schedule rows."""
+	"""Recompute a contract's totals from its schedule rows.
+
+	Callers hold the contract row lock. The read is a locking read (FOR UPDATE) because under
+	REPEATABLE READ a plain SELECT would reuse an older snapshot and miss another period's
+	payment committed while we waited for that lock.
+	"""
 	precision = frappe.get_precision("Shop Contract", "total_amount") or 2
 	total, paid = frappe.db.sql(
 		"""select coalesce(sum(amount), 0), coalesce(sum(paid_amount), 0)
-		from `tabRent Schedule` where parent = %s and parenttype = 'Shop Contract'""",
+		from `tabRent Schedule` where parent = %s and parenttype = 'Shop Contract'
+		for update""",
 		contract,
 	)[0]
 	frappe.db.set_value(

@@ -84,6 +84,13 @@ def _candidates(flag, condition, values):
 	)
 
 
+def _skip(commit):
+	"""Nothing to send for this row: end its transaction so the locks taken so far are released."""
+	if commit:
+		frappe.db.commit()
+	return False
+
+
 def _send_one(row_name, contract, kind, day, commit=True):
 	"""Queue one reminder inside its own savepoint. True if it was queued and flagged."""
 	spec = REMINDER_KINDS[kind]
@@ -95,7 +102,7 @@ def _send_one(row_name, contract, kind, day, commit=True):
 			"select name from `tabShop Contract` where name = %s and docstatus = 1 for update",
 			contract,
 		):
-			return False  # cancelled since the candidates were selected
+			return _skip(commit)  # cancelled since the candidates were selected
 		locked = frappe.db.sql(
 			f"""select `{spec['flag']}` as flag, status, period_start, period_end, due_date, outstanding_amount
 			from `tabRent Schedule` where name = %s and docstatus = 1 for update""",
@@ -103,7 +110,7 @@ def _send_one(row_name, contract, kind, day, commit=True):
 			as_dict=True,
 		)
 		if not locked or locked[0].flag or locked[0].status == "Paid":
-			return False  # another run got here first, or it was paid meanwhile
+			return _skip(commit)  # another run got here first, or it was paid meanwhile
 		row = locked[0]
 
 		info = frappe.db.get_value(

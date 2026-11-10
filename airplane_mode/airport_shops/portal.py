@@ -5,6 +5,7 @@ fields listed below ever reach a template.
 """
 import frappe
 from frappe.utils import fmt_money
+from frappe.utils.html_utils import sanitize_html
 
 PUBLIC_FIELDS = [
 	"name",
@@ -21,6 +22,7 @@ PUBLIC_FIELDS = [
 
 
 def _decorate(shop):
+	shop.description = sanitize_html(shop.description or "")
 	shop.rent_display = fmt_money(shop.rent_amount, currency=frappe.db.get_default("currency"))
 	return shop
 

@@ -19,7 +19,7 @@
  "list_columns": [],
  "login_required": 0,
  "max_attachment_size": 0,
- "modified": "2026-11-10 12:00:00.000000",
+ "modified": "2026-11-10 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Airport Shops",
  "name": "shop-lead",
@@ -37,7 +37,7 @@
   {"fieldname": "lead_name", "fieldtype": "Data", "label": "Your Name", "reqd": 1},
   {"fieldname": "email", "fieldtype": "Data", "label": "Email", "options": "Email", "reqd": 1},
   {"fieldname": "phone", "fieldtype": "Data", "label": "Phone", "options": "Phone"},
-  {"fieldname": "shop", "fieldtype": "Link", "label": "Shop", "options": "Airport Shop", "allow_read_on_all_link_options": 1},
+  {"fieldname": "shop", "fieldtype": "Data", "label": "Shop", "read_only": 1},
   {"fieldname": "message", "fieldtype": "Small Text", "label": "Message"}
  ]
 }

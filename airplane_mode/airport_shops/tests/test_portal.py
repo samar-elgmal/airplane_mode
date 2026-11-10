@@ -46,3 +46,22 @@ class TestPortal(FrappeTestCase):
 
 	def test_public_fields_never_include_tenant_data(self):
 		self.assertFalse({"current_tenant", "current_contract", "contract_expiry"} & set(PUBLIC_FIELDS))
+
+	def test_lead_for_unpublished_shop_is_rejected(self):
+		shop = make_shop(published=0)
+		lead = frappe.get_doc(
+			{"doctype": "Shop Lead", "lead_name": "A", "email": "a@example.com", "shop": shop.name}
+		)
+		self.assertRaises(frappe.ValidationError, lead.insert)
+
+	def test_lead_for_published_shop_is_accepted(self):
+		shop = make_shop()
+		lead = frappe.get_doc(
+			{"doctype": "Shop Lead", "lead_name": "A", "email": "a@example.com", "shop": shop.name}
+		).insert()
+		self.assertEqual(lead.shop, shop.name)
+
+	def test_description_is_sanitized_on_render(self):
+		shop = make_shop()
+		frappe.db.set_value("Airport Shop", shop.name, "description", "<img src=x onerror=alert(1)>")
+		self.assertNotIn("onerror", get_public_shop(shop.name).description)

@@ -24,6 +24,12 @@ Types shipped via fixtures and a REST API demo with Bruno (Part 3).
 - Concurrency: contract submit locks the shop row; payment submit/cancel lock the contract
   row then the period row (fixed order).
 - Portal: `/shops` (list) and `/shops/<name>` (details) via `website_route_rules`.
+- Money: every amount is rounded with `flt(value, precision)` (Currency precision) before
+  it is stored or compared; no raw float equality.
+- Locks use plain `SELECT … FOR UPDATE` only (no `SKIP LOCKED`), so nothing depends on a
+  specific MariaDB feature beyond Frappe v15's own minimum.
+- Sensitive shop fields (tenant/contract) are protected by **permlevel 1**, not by
+  hiding them in API requests.
 
 ---
 
@@ -36,7 +42,10 @@ Types shipped via fixtures and a REST API demo with Bruno (Part 3).
 - **Flight Crew Member** (child table): `crew_member` (Link Crew Member, reqd),
   `crew_role` (Data, fetch_from `crew_member.crew_role`, read-only).
 - **Airplane Flight**: new `crew` field (Table → Flight Crew Member), new section "Crew".
-  Validation: the same crew member may not appear twice on one flight.
+- `AirplaneFlight.validate` (Python, server-side — not JS):
+  - throw if the same `crew_member` appears more than once in `crew`;
+  - set each row's `crew_role` from `Crew Member.crew_role` via `frappe.db.get_value`
+    (`fetch_from` is only a UI convenience and is not trusted).
 
 ### Gate Number
 - **Airplane Flight**: `gate_number` (Data), `allow_on_submit = 1`.
@@ -45,10 +54,16 @@ Types shipped via fixtures and a REST API demo with Bruno (Part 3).
 - `AirplaneFlight.on_update` and `on_update_after_submit`: if
   `self.has_value_changed("gate_number")`, call
   `frappe.enqueue("airplane_mode.airplane_mode.tasks.update_ticket_gate_numbers",
-  flight=self.name, gate_number=self.gate_number, queue="short", enqueue_after_commit=True)`.
-- `update_ticket_gate_numbers(flight, gate_number)`: for every Airplane Ticket with
-  `flight = <flight>` and `docstatus < 2`, `frappe.db.set_value(..., "gate_number", gate_number)`.
-  Uses `set_value` so submitted tickets are updated without re-running validation.
+  flight=self.name, queue="short", enqueue_after_commit=True,
+  job_id=f"update_ticket_gates::{self.name}", deduplicate=True)`.
+  Frappe lifecycle: save → `on_update`; submit → `on_update` then `on_submit`; update after
+  submit → `on_update_after_submit` only — so one change triggers one hook.
+- `update_ticket_gate_numbers(flight)`: reads the **current** `gate_number` from the flight
+  in the DB (not a job argument), then for every Airplane Ticket with `flight = <flight>`
+  and `docstatus < 2` whose gate differs, `frappe.db.set_value(..., "gate_number", gate)`.
+  The job is idempotent: running it twice, or after two quick gate changes, always leaves
+  tickets on the latest gate. Uses `set_value` so submitted tickets are updated without
+  re-running validation.
 
 ---
 
@@ -66,9 +81,12 @@ New Module Def **Airport Shops** (added to `modules.txt`, folder
 | Tenant | normal | `tenant_name` (Data, reqd), `email` (Data, Email, reqd), `phone` (Data, Phone), `company` (Data) |
 | Shop Contract | submittable | `shop` (Link Airport Shop, reqd), `airport` (fetch), `tenant` (Link Tenant, reqd), `tenant_email` (fetch), `rent_amount` (Currency, monthly, default from shop), `start_date`, `end_date` (Date, reqd), `total_amount`, `total_paid`, `total_outstanding` (Currency, read-only), `rent_schedule` (Table Rent Schedule, read-only) |
 | Rent Schedule | child | `period_start`, `period_end`, `due_date` (Date), `amount`, `paid_amount`, `outstanding_amount` (Currency), `status` (Select Unpaid/Partly Paid/Paid), `reminder_sent_on` (Date), `overdue_reminder_sent_on` (Date) |
-| Rent Payment | submittable | `shop_contract` (Link Shop Contract, reqd), `shop`, `tenant`, `tenant_email` (fetched), `period_start` (Date, reqd — identifies the schedule row; JS pre-fills the earliest unpaid period), `period_outstanding` (Currency, read-only, informational), `amount` (Currency, reqd, > 0), `payment_date` (Date, default Today), `mode_of_payment` (Select Cash/Bank Transfer/Card/Cheque), `reference_no` (Data) |
+| Rent Payment | submittable | `shop_contract` (Link Shop Contract, reqd), `shop`, `tenant`, `tenant_email` (fetched), `period_start` (Date, reqd — identifies the schedule row; JS pre-fills the earliest unpaid period), `period_outstanding` (Currency, read-only, before this payment, informational), `period_outstanding_after_payment` (Currency, read-only, snapshot written on submit), `amount` (Currency, reqd, > 0), `payment_date` (Date, default Today), `mode_of_payment` (Select Cash/Bank Transfer/Card/Cheque), `reference_no` (Data) |
 | Shop Lead | normal | `lead_name` (Data, reqd), `email` (Data, Email, reqd), `phone` (Data), `shop` (Link Airport Shop), `message` (Small Text), `status` (Select New/Contacted/Converted/Lost) |
 | Airport Shop Settings | Single | `default_rent_amount` (Currency), `enable_rent_reminders` (Check), `reminder_days_before` (Int, default 3, ≥ 0), `overdue_after_days` (Int, default 3, ≥ 1) |
+
+Airport Shop `current_tenant`, `current_contract`, `contract_expiry` are **permlevel 1**
+(read: Airport Authority Personnel, System Manager; nobody writes them through the form).
 
 Naming: Airport Shop `{airport}-{shop_number}` (format autoname); Tenant `TEN-.####`;
 Shop Contract `CON-.YYYY.-.####`; Rent Payment `RCPT-.YYYY.-.####`; Shop Lead `LEAD-.####`.
@@ -78,6 +96,18 @@ Shop Contract `CON-.YYYY.-.####`; Rent Payment `RCPT-.YYYY.-.####`; Shop Lead `L
 **Default rent** — `AirportShop.before_insert`: if `rent_amount` empty, set it from
 `Airport Shop Settings.default_rent_amount`. Shop Contract `rent_amount` fetches from shop
 if empty.
+
+**Airport Shop — protected fields**
+- `PROTECTED = ("status", "current_tenant", "current_contract", "contract_expiry")`.
+- `before_insert`: force `status = Available` and clear the other three, whatever was sent.
+- `validate` (not new): if any protected field `has_value_changed`, `frappe.throw`. This
+  blocks the form, REST API, imports and Server Scripts alike (they all go through
+  `save()`). `sync_shop_status` writes with `frappe.db.set_value`, which skips `validate`,
+  so it stays the only writer.
+- `validate`: if `airport` changed and the shop has any submitted Shop Contract with
+  `end_date >= today` (active or future), throw. Otherwise allowed.
+- `on_update`: if `airport` changed, `update_airport_shop_counts` for both the previous
+  (`get_doc_before_save().airport`) and the new airport.
 
 **Rent schedule (anniversary periods)**
 - `end_date` is the **last day** of the lease (inclusive).
@@ -89,7 +119,7 @@ if empty.
   per month without drifting: 31 Jan → 28/29 Feb → 31 Mar → 30 Apr → 31 May.
 - `due_date = period_start`. Full periods cost `rent_amount`.
 - A final period shorter than a full month is **prorated by days**:
-  `rent_amount × days_in_period / days_in_full_period` (rounded to currency precision),
+  `flt(rent_amount × days_in_period / days_in_full_period, precision)`,
   where the full period is `period_start` to `period_start + 1 month − 1 day`.
 - Example: 15 Nov – 14 Feb → 3 full periods (15 Nov, 15 Dec, 15 Jan).
   15 Nov – 15 Feb → 3 full periods + a 1-day prorated period on 15 Feb.
@@ -133,18 +163,23 @@ if empty.
   payments and cancellations for one contract.
   Frappe runs each request in one transaction (autocommit off) on InnoDB tables, so the
   locks hold until the request commits or rolls back.
-- `on_submit`: `_lock_period` → re-check `paid_amount + self.amount <= amount` with the
-  locked values, else `frappe.throw` (rolls back the whole submit) → write `paid_amount`,
-  `outstanding_amount`, `status` (Paid when outstanding = 0, Partly Paid when 0 < paid < amount)
-  on the child row via `frappe.db.set_value` → recompute contract `total_paid` /
-  `total_outstanding` from the rows.
+- Precision: `p = frappe.get_precision("Rent Schedule", "amount")`. All sums, differences
+  and comparisons use `flt(x, p)`; e.g. new outstanding = `flt(amount - new_paid, p)`,
+  overpay check `flt(new_paid - amount, p) > 0`, Paid when `flt(outstanding, p) <= 0`.
+- `on_submit`: `_lock_period` → `new_paid = flt(paid_amount + self.amount, p)`; throw if it
+  exceeds `amount` (rolls back the whole submit) → write `paid_amount`,
+  `outstanding_amount`, `status` (Paid when outstanding ≤ 0, Partly Paid when 0 < paid <
+  amount) on the child row via `frappe.db.set_value` → `self.db_set(
+  "period_outstanding_after_payment", outstanding)` (snapshot for the receipt; never
+  recomputed later) → recompute contract `total_paid` / `total_outstanding` from the rows.
   A concurrent submit for the same contract waits on the lock, then sees the updated
   `paid_amount` and fails if it would overpay.
 - `on_cancel`: `_lock_period` → subtract `self.amount` → recompute status and contract
   totals. Uses the same locks, so a cancel and a new payment can't interleave.
 - Print format **Rent Receipt** built in Print Designer and exported with the app
   (print format JSON in module `Airport Shops`, `standard = Yes`). Shows tenant, shop,
-  airport, period, amount paid, period outstanding after this payment, payment date, mode.
+  airport, period, amount paid, `period_outstanding_after_payment` (the stored snapshot, so
+  reprinting an older receipt shows the balance as it was then), payment date, mode.
 
 **Shop counts per airport**
 - Airport gets read-only Int fields `total_shops`, `available_shops`, `occupied_shops`.
@@ -176,10 +211,11 @@ scheduler_events = {
     `templates/emails/rent_overdue.html`. Sets `overdue_reminder_sent_on = today`.
   Each email shows shop, period, outstanding amount and due date. A period whose upcoming
   window was missed (e.g. scheduler down) gets no upcoming email — only the overdue one.
-- Dedupe: each row is claimed with `FOR UPDATE SKIP LOCKED`, the flag is set, the email is
-  queued with `frappe.sendmail` (same transaction — the email queue row commits with the
-  flag), then `frappe.db.commit()` per row. Overlapping runs skip claimed rows; a retry or
-  a second manual run sends nothing for rows already flagged.
+- Dedupe, per candidate row: `SELECT <flag> FROM \`tabRent Schedule\` WHERE name=%s
+  FOR UPDATE` → **re-check the flag is still NULL** (skip if not) → set the flag → queue the
+  email with `frappe.sendmail` (same transaction, so the email queue row commits together
+  with the flag) → `frappe.db.commit()`. An overlapping run waits on the row lock, then sees
+  the flag set and skips. Plain `FOR UPDATE` works on any MariaDB that Frappe v15 supports.
 - Flags never reset: the schedule is built once on submit and is read-only, so due dates
   can't change. Amending a cancelled contract builds a fresh schedule with empty flags.
 - Settings form button **Send Reminders Now** → whitelisted method (System Manager /
@@ -215,17 +251,27 @@ scheduler_events = {
 
 ### REST API (Bruno)
 - Collection committed at `bruno/airplane_mode/`:
-  - `List Shops.bru` — `GET {{base_url}}/api/resource/Airport Shop?fields=["*"]&limit_page_length=0`
+  - `List Shops (all fields).bru` — `GET {{base_url}}/api/resource/Airport Shop?fields=["*"]&limit_page_length=0`
+    (the assignment asks for "all fields"; what comes back is limited by the user's permissions).
+  - `List Shops (public fields).bru` — same with
+    `fields=["name","shop_name","shop_number","airport","shop_type","area","rent_amount","status"]`.
   - `Create Shop.bru` — `POST {{base_url}}/api/resource/Airport Shop` with JSON body.
   - Header `Authorization: token {{api_key}}:{{api_secret}}`.
 - `environments/local.bru` with `base_url`; key/secret as secret env vars (not committed).
-- Auth: generate API key/secret from User → Settings → API Access.
+- Auth: generate API key/secret from User → Settings → API Access for a dedicated API user.
+- Permission demo: run the all-fields request once as an Airport Authority Personnel user
+  (tenant/contract fields present) and once as a low-privilege user with read-only access
+  to Airport Shop at permlevel 0 (those fields absent). A POST that tries to set `status` or
+  `current_tenant` is ignored/rejected (forced on insert by `before_insert`).
 
 ---
 
 ## Roles & Permissions
-- Airport Authority Personnel: full access to all Airport Shops doctypes and settings.
-- System Manager: full access.
+- Airport Authority Personnel: full access to all Airport Shops doctypes and settings,
+  plus read at permlevel 1 on Airport Shop.
+- System Manager: full access (incl. permlevel 1 read).
+- Travel Agent (existing role): read-only Airport Shop at permlevel 0 — used to show the
+  API permission demo.
 - Shop Lead: Guest create via web form only.
 
 ## Testing
@@ -242,7 +288,20 @@ Unit tests (`bench --site <site> run-tests --app airplane_mode`):
 - Partial payments: 40% + 60% → Partly Paid then Paid; third payment rejected (overpay);
   cancel one → back to Partly Paid; contract totals correct.
 - Contract cancel blocked while payments exist.
-- `update_ticket_gate_numbers` updates draft and submitted tickets.
+- `update_ticket_gate_numbers` updates draft and submitted tickets; running it twice is a
+  no-op; it uses the flight's current gate. Changing the gate on a submitted flight enqueues
+  exactly one job (patch `frappe.enqueue` and count calls).
+- Crew: duplicate crew member rejected server-side; tampered `crew_role` is overwritten
+  from Crew Member.
+- Airport Shop: changing `status`/`current_tenant`/`current_contract`/`contract_expiry`
+  via `save()` throws; insert with `status=Occupied` is stored as Available; airport change
+  blocked with an active/future contract; allowed otherwise and both airports' counts update.
+- Permissions: `frappe.get_list("Airport Shop", fields=["*"])` as a Travel Agent user does not
+  return `current_tenant`.
+- Receipt snapshot: after 40% then 60%, the first payment still has
+  `period_outstanding_after_payment` = 60% of rent.
+- Precision: rent 1000 over a 31-day full period with a 10-day stub → 322.58; three
+  payments of 333.33/333.33/333.34 on a 1000 period → Paid, outstanding 0.
 - Payment on a missing period / cancelled contract rejected by `_lock_period`.
 - `send_rent_reminders`: nothing when disabled; upcoming sent once inside the window and not
   before it or after the due date; overdue sent once after `overdue_after_days`; second run
@@ -253,6 +312,8 @@ Print Designer receipt prints, Bruno requests succeed, two browser tabs submitti
 for the same period cannot overpay.
 
 ## Setup Prerequisites
+- MariaDB **10.6+** with InnoDB (Frappe v15 minimum; this bench runs 10.11.13). Only plain
+  `SELECT … FOR UPDATE` is used.
 - `bench get-app print_designer` (version compatible with Frappe v15) and
   `bench --site <site> install-app print_designer`.
 - Scheduler enabled on the site (`bench --site <site> enable-scheduler`) and a worker running

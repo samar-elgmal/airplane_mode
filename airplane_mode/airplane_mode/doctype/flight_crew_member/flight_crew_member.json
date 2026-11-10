@@ -1,0 +1,24 @@
+{
+ "actions": [],
+ "creation": "2026-11-10 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": ["crew_member", "full_name", "crew_role"],
+ "fields": [
+  {"fieldname": "crew_member", "fieldtype": "Link", "label": "Crew Member", "options": "Crew Member", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "full_name", "fieldtype": "Data", "label": "Full Name", "fetch_from": "crew_member.full_name", "read_only": 1, "in_list_view": 1},
+  {"fieldname": "crew_role", "fieldtype": "Data", "label": "Crew Role", "fetch_from": "crew_member.crew_role", "read_only": 1, "in_list_view": 1}
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-10 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Airplane Mode",
+ "name": "Flight Crew Member",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

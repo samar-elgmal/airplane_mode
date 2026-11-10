@@ -131,7 +131,7 @@ if empty.
 - `due_date = period_start`. Full periods cost `rent_amount`.
 - A final period shorter than a full month is **prorated by days**:
   `flt(rent_amount × days_in_period / days_in_full_period, precision)`,
-  where the full period is `period_start` to `period_start + 1 month − 1 day`.
+  where the full period runs from `period_start` to the day before the next anniversary.
 - Example: 15 Nov – 14 Feb → 3 full periods (15 Nov, 15 Dec, 15 Jan).
   15 Nov – 15 Feb → 3 full periods + a 1-day prorated period on 15 Feb.
 
@@ -220,7 +220,7 @@ if empty.
 **Shop counts per airport**
 - Airport gets read-only Int fields `total_shops`, `available_shops`, `occupied_shops`.
 - `update_airport_shop_counts(airport)` recomputes via `frappe.db.count` and writes them;
-  called by `sync_shop_status` and by Airport Shop `on_trash`, plus for the previous airport
+  called by `sync_shop_status` and by Airport Shop `after_delete` (during `on_trash` the row still exists), plus for the previous airport
   when a shop's airport changes.
 - Script report **Airport Shop Occupancy** computes counts live with a GROUP BY query (never
   reads the stored fields): Airport, Total, Available, Occupied, Occupancy %; airport filter;
@@ -346,7 +346,7 @@ Unit tests (`bench --site <site> run-tests --app airplane_mode`):
 - Overlapping contract rejected; non-overlapping adjacent contract allowed; overlap
   re-checked in `before_submit` (two drafts for the same dates: second submit fails).
 - `sync_shop_status`: active contract → Occupied; future contract → stays Available, then
-  Occupied once today reaches start (`FrappeTestCase.freeze_time`);
+  Occupied once today reaches start (date-dependent functions take `on_date`; `freezegun` is not installed in this bench);
   expired → Available; cancel → Available. Airport counts match after each.
 - Partial payments: 40% + 60% → Partly Paid then Paid; third payment rejected (overpay);
   cancel one → back to Partly Paid; contract totals correct.
@@ -392,8 +392,9 @@ for the same period cannot overpay.
   `SELECT … FOR UPDATE` is used.
 - `developer_mode: 1` on the site (already set on `airplane.local`), so new doctypes,
   reports and print formats are written to the app folder.
-- `bench get-app print_designer --branch version-15` and
+- `bench get-app print_designer https://github.com/frappe/print_designer.git --branch v1.6.7` (there is no `version-15` branch upstream) and
   `bench --site airplane.local install-app print_designer`. Its asset build runs on this
   bench's Node 18.19. If the build fails, that blocks only the receipt task.
+- An outgoing Email Account marked default outgoing, so reminders can be queued and delivered.
 - Scheduler enabled on the site (`bench --site <site> enable-scheduler`) and a worker running
   for the background job.

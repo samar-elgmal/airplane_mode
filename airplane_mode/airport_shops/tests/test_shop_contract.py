@@ -130,6 +130,14 @@ class TestShopContract(FrappeTestCase):
 		contract.cancel()
 		self.assertEqual(shop_state(shop).status, "Available")
 
+	def test_cancel_blocked_while_payments_exist(self):
+		# Stand-in for a submitted payment until Rent Payment exists (Task 8 tests the real path).
+		contract = make_contract(make_shop(), start="2027-01-01", end="2027-03-31")
+		frappe.db.set_value("Shop Contract", contract.name, "total_paid", 100)
+		contract.reload()
+		with self.assertRaisesRegex(frappe.ValidationError, "Rent Payments"):
+			contract.cancel()
+
 	def test_amend_rebuilds_schedule(self):
 		shop = make_shop()
 		contract = make_contract(shop, start="2027-01-01", end="2027-03-31")

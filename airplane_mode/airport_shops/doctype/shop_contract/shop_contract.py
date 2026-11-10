@@ -33,16 +33,15 @@ class ShopContract(Document):
 		sync_shop_status(self.shop)
 
 	def before_cancel(self):
-		# Same lock Rent Payment takes first, so a cancel and a payment can't interleave.
-		frappe.db.sql("select name from `tabShop Contract` where name = %s for update", self.name)
-		# MariaDB runs REPEATABLE READ, so a plain SELECT reads the transaction's snapshot and
-		# misses rows committed after it. A locking read (FOR UPDATE) sees the latest committed
-		# rows, so a payment submitted while we waited for the lock is not missed.
-		# The table_exists guard covers the time before Rent Payment exists (Task 8).
-		if frappe.db.table_exists("Rent Payment") and frappe.db.sql(
-			"select name from `tabRent Payment` where shop_contract = %s and docstatus = 1 limit 1 for update",
-			self.name,
-		):
+		# Lock order matters: a Rent Payment submit locks its own row first, then this contract.
+		# So never lock Rent Payment rows here (contract -> payment would invert that order and
+		# can deadlock). Payments update total_paid while holding this same contract lock, so a
+		# locking read of it (FOR UPDATE sees the latest committed value, not the REPEATABLE READ
+		# snapshot) is current.
+		total_paid = frappe.db.sql(
+			"select total_paid from `tabShop Contract` where name = %s for update", self.name
+		)[0][0]
+		if flt(total_paid) > 0:
 			frappe.throw(_("Cancel the submitted Rent Payments of this contract first."))
 
 	def on_cancel(self):

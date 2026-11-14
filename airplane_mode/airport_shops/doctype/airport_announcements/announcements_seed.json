@@ -1,0 +1,23 @@
+{
+	"ANN-0001": {
+		"name": "ANN-0001",
+		"title": "Gate B12 closed for maintenance",
+		"airport": "Demo Airport North",
+		"priority": "High",
+		"notes": "Passengers for B12 flights should use gate B14 until further notice."
+	},
+	"ANN-0002": {
+		"name": "ANN-0002",
+		"title": "New duty-free shop opening",
+		"airport": "Demo Airport North",
+		"priority": "Low",
+		"notes": "A new duty-free shop opens next to Terminal 1 departures."
+	},
+	"ANN-0003": {
+		"name": "ANN-0003",
+		"title": "Security check delays",
+		"airport": "Demo Airport South",
+		"priority": "Medium",
+		"notes": "Please arrive at least three hours before departure."
+	}
+}

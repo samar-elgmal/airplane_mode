@@ -1,0 +1,8 @@
+// Copyright (c) 2026, samar and contributors
+// For license information, please see license.txt
+
+// frappe.ui.form.on("Airport Announcements", {
+// 	refresh(frm) {
+
+// 	},
+// });

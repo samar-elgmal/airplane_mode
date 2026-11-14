@@ -3,6 +3,8 @@
 
 import frappe
 from frappe import _
+from frappe.query_builder import Case
+from frappe.query_builder.functions import Count, Sum
 from frappe.utils import flt
 
 
@@ -16,18 +18,34 @@ def execute(filters=None):
 		{"fieldname": "occupancy", "label": _("Occupancy %"), "fieldtype": "Percent", "width": 120},
 	]
 
-	condition = "where airport = %(airport)s" if filters.get("airport") else ""
+	# condition = "where airport = %(airport)s" if filters.get("airport") else ""
+	# data = frappe.db.sql(
+	# 	f"""select airport,
+	# 		count(*) as total,
+	# 		sum(status = 'Available') as available,
+	# 		sum(status = 'Occupied') as occupied
+	# 	from `tabAirport Shop` {condition}
+	# 	group by airport order by airport""",
+	# 	filters,
+	# 	as_dict=True,
+	# )
+
 	# Always computed live from the shops; never reads the stored counts on Airport.
-	data = frappe.db.sql(
-		f"""select airport,
-			count(*) as total,
-			sum(status = 'Available') as available,
-			sum(status = 'Occupied') as occupied
-		from `tabAirport Shop` {condition}
-		group by airport order by airport""",
-		filters,
-		as_dict=True,
+	shop = frappe.qb.DocType("Airport Shop")
+	query = (
+		frappe.qb.from_(shop)
+		.select(
+			shop.airport,
+			Count("*").as_("total"),
+			Sum(Case().when(shop.status == "Available", 1).else_(0)).as_("available"),
+			Sum(Case().when(shop.status == "Occupied", 1).else_(0)).as_("occupied"),
+		)
+		.groupby(shop.airport)
+		.orderby(shop.airport)
 	)
+	if filters.get("airport"):
+		query = query.where(shop.airport == filters.get("airport"))
+	data = query.run(as_dict=True)
 	for row in data:
 		row.available, row.occupied = int(row.available or 0), int(row.occupied or 0)
 		row.occupancy = flt(row.occupied * 100 / row.total, 1) if row.total else 0

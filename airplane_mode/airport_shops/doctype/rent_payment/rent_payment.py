@@ -66,21 +66,31 @@ class RentPayment(Document):
 
 	def _lock_period(self):
 		"""The only lock path for payments: contract row first, then the period row."""
-		if not frappe.db.sql(
-			"select name from `tabShop Contract` where name = %s and docstatus = 1 for update",
-			self.shop_contract,
+		# if not frappe.db.sql(
+		# 	"select name from `tabShop Contract` where name = %s and docstatus = 1 for update",
+		# 	self.shop_contract,
+		# ):
+		if not frappe.db.get_value(
+			"Shop Contract", {"name": self.shop_contract, "docstatus": 1}, "name", for_update=True
 		):
 			frappe.throw(_("Shop Contract {0} is not submitted.").format(self.shop_contract))
-		rows = frappe.db.sql(
-			"""select name, amount, paid_amount from `tabRent Schedule`
-			where parent = %s and parenttype = 'Shop Contract' and period_start = %s
-			for update""",
-			(self.shop_contract, self.period_start),
+		# rows = frappe.db.sql(
+		# 	"""select name, amount, paid_amount from `tabRent Schedule`
+		# 	where parent = %s and parenttype = 'Shop Contract' and period_start = %s
+		# 	for update""",
+		# 	(self.shop_contract, self.period_start),
+		# 	as_dict=True,
+		# )
+		row = frappe.db.get_value(
+			"Rent Schedule",
+			{"parent": self.shop_contract, "parenttype": "Shop Contract", "period_start": self.period_start},
+			["name", "amount", "paid_amount"],
 			as_dict=True,
+			for_update=True,
 		)
-		if not rows:
+		if not row:
 			frappe.throw(_("Contract {0} has no rent period starting on {1}.").format(self.shop_contract, self.period_start))
-		return rows[0]
+		return row
 
 	def _apply(self, row, new_paid):
 		p = money_precision()

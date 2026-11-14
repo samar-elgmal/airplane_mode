@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import frappe
+from frappe.query_builder.functions import Coalesce
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import now_datetime
 
@@ -38,11 +39,17 @@ class TestRentReminders(FrappeTestCase):
 		# Isolate from rows already on the site: mark them as reminded inside this test's
 		# transaction (rolled back in tearDown), so counts only see this test's contracts
 		# and no real tenant gets an Email Queue row, even an uncommitted one.
-		frappe.db.sql(
-			"""update `tabRent Schedule`
-			set reminder_sent_on = coalesce(reminder_sent_on, '2000-01-01'),
-				overdue_reminder_sent_on = coalesce(overdue_reminder_sent_on, '2000-01-01')"""
-		)
+		# frappe.db.sql(
+		# 	"""update `tabRent Schedule`
+		# 	set reminder_sent_on = coalesce(reminder_sent_on, '2000-01-01'),
+		# 		overdue_reminder_sent_on = coalesce(overdue_reminder_sent_on, '2000-01-01')"""
+		# )
+		schedule = frappe.qb.DocType("Rent Schedule")
+		(
+			frappe.qb.update(schedule)
+			.set(schedule.reminder_sent_on, Coalesce(schedule.reminder_sent_on, "2000-01-01"))
+			.set(schedule.overdue_reminder_sent_on, Coalesce(schedule.overdue_reminder_sent_on, "2000-01-01"))
+		).run()
 		settings = frappe.get_single("Airport Shop Settings")
 		settings.update({"enable_rent_reminders": 1, "reminder_days_before": 3, "overdue_after_days": 3})
 		settings.save()

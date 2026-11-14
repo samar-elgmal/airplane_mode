@@ -52,36 +52,60 @@ def send_rent_reminders(on_date=None, commit=True):
 		return result
 
 	day = getdate(on_date or today())
+	# windows = {
+	# 	# due_date - days_before <= day <= due_date
+	# 	"upcoming": (
+	# 		"rs.due_date between %(day)s and %(until)s",
+	# 		{"until": add_days(day, cint(settings.reminder_days_before))},
+	# 	),
+	# 	# day >= due_date + overdue_after_days
+	# 	"overdue": (
+	# 		"rs.due_date <= %(until)s",
+	# 		{"until": add_days(day, -max(cint(settings.overdue_after_days), 1))},
+	# 	),
+	# }
+	schedule = frappe.qb.DocType("Rent Schedule")
 	windows = {
 		# due_date - days_before <= day <= due_date
-		"upcoming": (
-			"rs.due_date between %(day)s and %(until)s",
-			{"until": add_days(day, cint(settings.reminder_days_before))},
-		),
+		"upcoming": schedule.due_date.between(day, add_days(day, cint(settings.reminder_days_before))),
 		# day >= due_date + overdue_after_days
-		"overdue": (
-			"rs.due_date <= %(until)s",
-			{"until": add_days(day, -max(cint(settings.overdue_after_days), 1))},
-		),
+		"overdue": schedule.due_date <= add_days(day, -max(cint(settings.overdue_after_days), 1)),
 	}
-	for kind, (condition, values) in windows.items():
-		for candidate in _candidates(REMINDER_KINDS[kind]["flag"], condition, {"day": day, **values}):
+	for kind, condition in windows.items():
+		for candidate in _candidates(REMINDER_KINDS[kind]["flag"], condition):
 			if _send_one(candidate.name, candidate.contract, kind, day, commit):
 				result[kind] += 1
 	return result
 
 
-def _candidates(flag, condition, values):
-	return frappe.db.sql(
-		f"""select rs.name, rs.parent as contract
-		from `tabRent Schedule` rs
-		join `tabShop Contract` sc on sc.name = rs.parent
-		where rs.parenttype = 'Shop Contract' and sc.docstatus = 1
-			and rs.status != 'Paid' and rs.`{flag}` is null and {condition}
-		order by rs.due_date, rs.name""",
-		values,
-		as_dict=True,
-	)
+def _candidates(flag, condition):
+	# return frappe.db.sql(
+	# 	f"""select rs.name, rs.parent as contract
+	# 	from `tabRent Schedule` rs
+	# 	join `tabShop Contract` sc on sc.name = rs.parent
+	# 	where rs.parenttype = 'Shop Contract' and sc.docstatus = 1
+	# 		and rs.status != 'Paid' and rs.`{flag}` is null and {condition}
+	# 	order by rs.due_date, rs.name""",
+	# 	values,
+	# 	as_dict=True,
+	# )
+	schedule = frappe.qb.DocType("Rent Schedule")
+	contract = frappe.qb.DocType("Shop Contract")
+	return (
+		frappe.qb.from_(schedule)
+		.join(contract)
+		.on(contract.name == schedule.parent)
+		.select(schedule.name, schedule.parent.as_("contract"))
+		.where(
+			(schedule.parenttype == "Shop Contract")
+			& (contract.docstatus == 1)
+			& (schedule.status != "Paid")
+			& schedule[flag].isnull()
+			& condition
+		)
+		.orderby(schedule.due_date)
+		.orderby(schedule.name)
+	).run(as_dict=True)
 
 
 def _skip(commit):
@@ -98,20 +122,29 @@ def _send_one(row_name, contract, kind, day, commit=True):
 	frappe.db.savepoint(save_point)
 	try:
 		# Contract first, exactly like Rent Payment._lock_period, then the schedule row.
-		if not frappe.db.sql(
-			"select name from `tabShop Contract` where name = %s and docstatus = 1 for update",
-			contract,
+		# if not frappe.db.sql(
+		# 	"select name from `tabShop Contract` where name = %s and docstatus = 1 for update",
+		# 	contract,
+		# ):
+		if not frappe.db.get_value(
+			"Shop Contract", {"name": contract, "docstatus": 1}, "name", for_update=True
 		):
 			return _skip(commit)  # cancelled since the candidates were selected
-		locked = frappe.db.sql(
-			f"""select `{spec['flag']}` as flag, status, period_start, period_end, due_date, outstanding_amount
-			from `tabRent Schedule` where name = %s and docstatus = 1 for update""",
-			row_name,
+		# locked = frappe.db.sql(
+		# 	f"""select `{spec['flag']}` as flag, status, period_start, period_end, due_date, outstanding_amount
+		# 	from `tabRent Schedule` where name = %s and docstatus = 1 for update""",
+		# 	row_name,
+		# 	as_dict=True,
+		# )
+		row = frappe.db.get_value(
+			"Rent Schedule",
+			{"name": row_name, "docstatus": 1},
+			[spec["flag"], "status", "period_start", "period_end", "due_date", "outstanding_amount"],
 			as_dict=True,
+			for_update=True,
 		)
-		if not locked or locked[0].flag or locked[0].status == "Paid":
+		if not row or row[spec["flag"]] or row.status == "Paid":
 			return _skip(commit)  # another run got here first, or it was paid meanwhile
-		row = locked[0]
 
 		info = frappe.db.get_value(
 			"Shop Contract", contract, ["shop", "tenant", "tenant_email", "airport"], as_dict=True

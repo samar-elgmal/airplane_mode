@@ -1,4 +1,5 @@
 import frappe
+from frappe.query_builder.functions import Coalesce, Sum
 from frappe.utils import add_days, add_months, date_diff, flt, getdate, today
 
 
@@ -118,12 +119,19 @@ def update_contract_totals(contract):
 	payment committed while we waited for that lock.
 	"""
 	precision = frappe.get_precision("Shop Contract", "total_amount") or 2
-	total, paid = frappe.db.sql(
-		"""select coalesce(sum(amount), 0), coalesce(sum(paid_amount), 0)
-		from `tabRent Schedule` where parent = %s and parenttype = 'Shop Contract'
-		for update""",
-		contract,
-	)[0]
+	# total, paid = frappe.db.sql(
+	# 	"""select coalesce(sum(amount), 0), coalesce(sum(paid_amount), 0)
+	# 	from `tabRent Schedule` where parent = %s and parenttype = 'Shop Contract'
+	# 	for update""",
+	# 	contract,
+	# )[0]
+	schedule = frappe.qb.DocType("Rent Schedule")
+	total, paid = (
+		frappe.qb.from_(schedule)
+		.select(Coalesce(Sum(schedule.amount), 0), Coalesce(Sum(schedule.paid_amount), 0))
+		.where((schedule.parent == contract) & (schedule.parenttype == "Shop Contract"))
+		.for_update()
+	).run()[0]
 	frappe.db.set_value(
 		"Shop Contract",
 		contract,

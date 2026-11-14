@@ -29,7 +29,8 @@ class ShopContract(Document):
 	def before_submit(self):
 		# Lock the shop so two contracts for it can't be submitted at the same time,
 		# then re-check the overlap while holding the lock.
-		frappe.db.sql("select name from `tabAirport Shop` where name = %s for update", self.shop)
+		# frappe.db.sql("select name from `tabAirport Shop` where name = %s for update", self.shop)
+		frappe.db.get_value("Airport Shop", self.shop, "name", for_update=True)
 		self.validate_no_overlap(for_update=True)
 		self.make_rent_schedule()
 
@@ -43,9 +44,10 @@ class ShopContract(Document):
 		# can deadlock). Payments update total_paid while holding this same contract lock, so a
 		# locking read of it (FOR UPDATE sees the latest committed value, not the REPEATABLE READ
 		# snapshot) is current.
-		total_paid = frappe.db.sql(
-			"select total_paid from `tabShop Contract` where name = %s for update", self.name
-		)[0][0]
+		# total_paid = frappe.db.sql(
+		# 	"select total_paid from `tabShop Contract` where name = %s for update", self.name
+		# )[0][0]
+		total_paid = frappe.db.get_value("Shop Contract", self.name, "total_paid", for_update=True)
 		if flt(total_paid) > 0:
 			frappe.throw(_("Cancel the submitted Rent Payments of this contract first."))
 
@@ -54,29 +56,21 @@ class ShopContract(Document):
 		reopen_leads_for_contract(self)
 
 	def validate_no_overlap(self, for_update=False):
-		if for_update:
-			# Locking read: under REPEATABLE READ a plain SELECT would reuse the snapshot taken
-			# at the first read in validate() and miss a contract committed while we waited
-			# for the shop lock. FOR UPDATE reads the latest committed rows.
-			rows = frappe.db.sql(
-				"""select name from `tabShop Contract`
-				where shop = %s and docstatus = 1 and name != %s and start_date <= %s and end_date >= %s
-				limit 1 for update""",
-				(self.shop, self.name, self.end_date, self.start_date),
-			)
-			clash = rows[0][0] if rows else None
-		else:
-			clash = frappe.db.get_value(
-				"Shop Contract",
-				{
-					"shop": self.shop,
-					"docstatus": 1,
-					"name": ["!=", self.name],
-					"start_date": ["<=", self.end_date],
-					"end_date": [">=", self.start_date],
-				},
-				"name",
-			)
+		# for_update=True (from before_submit) makes this a locking read: under REPEATABLE READ a
+		# plain SELECT would reuse the snapshot taken in validate() and miss a contract committed
+		# while we waited for the shop lock. FOR UPDATE reads the latest committed rows.
+		clash = frappe.db.get_value(
+			"Shop Contract",
+			{
+				"shop": self.shop,
+				"docstatus": 1,
+				"name": ["!=", self.name],
+				"start_date": ["<=", self.end_date],
+				"end_date": [">=", self.start_date],
+			},
+			"name",
+			for_update=for_update,
+		)
 		if clash:
 			frappe.throw(_("Shop {0} already has contract {1} for these dates.").format(self.shop, clash))
 

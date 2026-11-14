@@ -85,6 +85,9 @@ jobs:
         run: |
           pip install frappe-bench
           bench init --skip-redis-config-generation --skip-assets --frappe-branch version-15 --python "$(which python)" ~/frappe-bench
+          # The newer MariaDB client requires SSL by default and the mariadb:10.6 service has none.
+          # Turn it off for every client call, including the ones bench new-site makes.
+          printf "[client]\nskip-ssl\n" > ~/.my.cnf
           mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
           mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
 
